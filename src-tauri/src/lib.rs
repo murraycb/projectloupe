@@ -1,7 +1,2 @@
-pub mod burst;
-pub mod image_info;
-pub mod quality;
-
-pub use burst::{BurstGroup, BurstDetector, BurstConfig};
-pub use image_info::{ImageInfo, ImageMetadata};
-pub use quality::{QualityScore, QualityAnalyzer};
+// Tauri doesn't have a lib.rs by default, but we can export public types here if needed
+pub use burst_detection::{BurstGroup, BurstDetector, BurstConfig, ImageInfo, ImageMetadata, QualityScore, QualityAnalyzer};

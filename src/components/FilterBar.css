@@ -1,0 +1,178 @@
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 12px 24px;
+  background-color: #242424;
+  border-bottom: 1px solid #333333;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.filter-section label {
+  font-size: 14px;
+  color: #999999;
+  font-weight: 500;
+}
+
+.star-filters,
+.flag-filters,
+.color-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.star-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background-color: #1a1a1a;
+  color: #999999;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.star-button:hover {
+  background-color: #2a2a2a;
+  color: #ffffff;
+}
+
+.star-button.active {
+  background-color: #0066cc;
+  color: #ffffff;
+}
+
+.star {
+  color: #ffd700;
+  font-size: 14px;
+}
+
+.flag-button {
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flag-button:hover {
+  background-color: #2a2a2a;
+}
+
+.flag-button.active {
+  background-color: #333333;
+}
+
+.flag-icon {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.pick-icon {
+  color: #4caf50;
+}
+
+.reject-icon {
+  color: #f44336;
+}
+
+.unflagged-icon {
+  color: #666666;
+}
+
+.color-button {
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.color-button:hover {
+  background-color: #2a2a2a;
+}
+
+.color-button.active {
+  background-color: #333333;
+}
+
+.color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.color-button.red .color-dot { background-color: #f44336; }
+.color-button.yellow .color-dot { background-color: #ffeb3b; }
+.color-button.green .color-dot { background-color: #4caf50; }
+.color-button.blue .color-dot { background-color: #2196f3; }
+.color-button.purple .color-dot { background-color: #9c27b0; }
+
+.burst-filter {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #1a1a1a;
+  color: #999999;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.burst-filter:hover {
+  background-color: #2a2a2a;
+  color: #ffffff;
+}
+
+.burst-filter.active {
+  background-color: #0066cc;
+  color: #ffffff;
+}
+
+.filter-info {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.image-count {
+  font-size: 12px;
+  color: #999999;
+}
+
+.clear-filters {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  color: #0066cc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.clear-filters:hover {
+  background-color: rgba(0, 102, 204, 0.1);
+}

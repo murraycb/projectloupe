@@ -5,14 +5,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tauri::command;
-
-mod burst;
-mod image_info;
-mod quality;
-
-pub use burst::{BurstGroup, BurstDetector, BurstConfig};
-pub use image_info::{ImageInfo, ImageMetadata};
-pub use quality::{QualityScore, QualityAnalyzer};
+use burst_detection::{BurstGroup, BurstDetector, BurstConfig, ImageInfo, QualityAnalyzer};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AnalysisRequest {
@@ -121,13 +114,22 @@ async fn perform_analysis(request: AnalysisRequest) -> Result<(Vec<BurstGroup>, 
 }
 
 #[command]
+async fn import_folder(folder_path: String) -> Result<bool, String> {
+    // Stub implementation for now - will be wired up to actual logic later
+    println!("Importing folder: {}", folder_path);
+    Ok(true)
+}
+
+#[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust and Tauri!", name)
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, analyze_folder])
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![greet, analyze_folder, import_folder])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/burst-detection", "src-tauri"]
+resolver = "2"
+
+[workspace.dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+rayon = "1.7"
+rexif = "0.7"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
