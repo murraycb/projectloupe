@@ -16,6 +16,8 @@ export interface ImageEntry {
   colorLabel: 'none' | 'red' | 'yellow' | 'green' | 'blue' | 'purple';
   burstGroupId: string | null;
   burstIndex: number | null;
+  _mockHue?: number;
+  _mockBrightness?: number;
 }
 
 export interface BurstGroupData {
@@ -30,3 +32,5 @@ export type FilterState = {
   colorLabels: Set<string>;
   showBurstsOnly: boolean;
 };
+
+export type OverlayMode = 'none' | 'minimal' | 'standard' | 'full';

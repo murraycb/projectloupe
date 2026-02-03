@@ -3,81 +3,80 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  padding: 40px;
+  padding: var(--pl-space-2xl);
 }
 
 .drop-zone {
-  border: 2px dashed #333333;
-  border-radius: 8px;
-  padding: 48px 40px;
+  border: 1px dashed var(--pl-border-strong);
+  border-radius: var(--pl-radius-lg);
+  padding: var(--pl-space-2xl) var(--pl-space-2xl);
   text-align: center;
   cursor: pointer;
-  transition: all 200ms ease;
-  max-width: 400px;
+  transition: all var(--pl-transition-slow);
+  max-width: 360px;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--pl-space-sm);
 }
 
 .drop-zone:hover {
-  border-color: #0066cc;
-  background-color: rgba(0, 102, 204, 0.04);
+  border-color: var(--pl-accent);
+  background: var(--pl-accent-subtle);
 }
 
 .drop-zone.dragging {
-  border-color: #0066cc;
-  background-color: rgba(0, 102, 204, 0.08);
-  transform: scale(1.01);
+  border-color: var(--pl-accent);
+  background: var(--pl-accent-subtle);
 }
 
 .drop-zone.importing {
-  border-color: #4caf50;
-  background-color: rgba(76, 175, 80, 0.04);
+  border-color: var(--pl-pick);
   cursor: default;
 }
 
 .folder-icon {
-  color: #555555;
-  margin-bottom: 4px;
+  color: var(--pl-text-tertiary);
+  opacity: 0.5;
 }
 
 .drop-zone:hover .folder-icon {
-  color: #0066cc;
+  color: var(--pl-accent);
+  opacity: 1;
 }
 
 .drop-zone h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #cccccc;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pl-text-primary);
   margin: 0;
 }
 
 .drop-zone p {
-  color: #777777;
-  font-size: 14px;
+  color: var(--pl-text-secondary);
+  font-size: 13px;
   margin: 0;
 }
 
 .drop-zone .hint {
-  font-size: 12px;
-  color: #555555;
+  font-size: 11px;
+  color: var(--pl-text-tertiary);
 }
 
 .import-progress {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: var(--pl-space-md);
 }
 
 .spinner {
-  width: 28px;
-  height: 28px;
-  border: 2px solid #333333;
-  border-top: 2px solid #4caf50;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--pl-border);
+  border-top: 2px solid var(--pl-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -88,7 +87,7 @@
 }
 
 .import-progress p {
-  color: #4caf50;
+  color: var(--pl-accent);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
 }

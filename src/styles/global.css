@@ -1,46 +1,87 @@
+@import './theme.css';
+
 * {
-  box-sizing: border-box;
   margin: 0;
   padding: 0;
+  box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-  background-color: #1a1a1a;
-  color: #ffffff;
+html, body, #root {
+  height: 100%;
   overflow: hidden;
 }
 
-#root {
-  height: 100vh;
+body {
+  font-family: var(--pl-font);
+  font-size: 13px;
+  color: var(--pl-text-primary);
+  background-color: var(--pl-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
-/* Custom scrollbars */
+/* Scrollbar — minimal */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #404040;
-  border-radius: 4px;
+  background: var(--pl-border-strong);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: var(--pl-text-tertiary);
 }
 
-/* Focus styles */
-button:focus {
-  outline: 2px solid #0066cc;
-  outline-offset: 2px;
+/* Selection */
+::selection {
+  background: var(--pl-accent-subtle);
 }
 
-/* Transitions */
-* {
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+/* Dockview overrides — strip all default chrome */
+.dockview-theme-custom .dv-tabs-container {
+  display: none !important;
+}
+
+.dockview-theme-custom .dv-default-tab {
+  display: none !important;
+}
+
+.dockview-theme-custom .dv-groupview {
+  background: transparent !important;
+}
+
+.dockview-theme-custom .dv-content-container {
+  background: transparent !important;
+}
+
+.dockview-theme-custom .dv-resize-container {
+  background: transparent !important;
+}
+
+.dockview-theme-custom .dv-split-view-container .dv-sash {
+  background: var(--pl-border) !important;
+  transition: background var(--pl-transition-normal) !important;
+}
+
+.dockview-theme-custom .dv-split-view-container .dv-sash:hover {
+  background: var(--pl-accent) !important;
+}
+
+.dockview-theme-custom {
+  --dv-group-view-background-color: transparent;
+  --dv-tabs-and-actions-container-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-background-color: transparent;
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-tab-divider-color: transparent;
+  --dv-separator-border: var(--pl-border);
 }

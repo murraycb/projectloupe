@@ -1,0 +1,115 @@
+/* ProjectLoupe Design Tokens — Linear-inspired */
+/* Dark + Light mode via CSS custom properties */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces */
+  --pl-bg: #161616;
+  --pl-bg-raised: #1e1e1e;
+  --pl-bg-overlay: #232323;
+  --pl-bg-hover: rgba(255, 255, 255, 0.04);
+  --pl-bg-active: rgba(255, 255, 255, 0.06);
+
+  /* Borders — subtle, typography does the heavy lifting */
+  --pl-border: rgba(255, 255, 255, 0.06);
+  --pl-border-strong: rgba(255, 255, 255, 0.1);
+
+  /* Text */
+  --pl-text-primary: #eeeeee;
+  --pl-text-secondary: #888888;
+  --pl-text-tertiary: #555555;
+  --pl-text-inverse: #161616;
+
+  /* Accent */
+  --pl-accent: #5e6ad2;
+  --pl-accent-hover: #6c78db;
+  --pl-accent-subtle: rgba(94, 106, 210, 0.15);
+
+  /* Selection */
+  --pl-selected: rgba(94, 106, 210, 0.2);
+  --pl-selected-border: #5e6ad2;
+
+  /* Status */
+  --pl-pick: #4caf50;
+  --pl-pick-subtle: rgba(76, 175, 80, 0.15);
+  --pl-reject: #e5534b;
+  --pl-reject-subtle: rgba(229, 83, 75, 0.15);
+  --pl-star: #d4a72c;
+
+  /* Color labels — desaturated */
+  --pl-label-red: #c74e4e;
+  --pl-label-yellow: #c4a23b;
+  --pl-label-green: #4a9e5c;
+  --pl-label-blue: #4a7ec7;
+  --pl-label-purple: #8b5ec7;
+
+  /* Shadows */
+  --pl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pl-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --pl-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* Typography */
+  --pl-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --pl-font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --pl-font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  /* Spacing */
+  --pl-space-xs: 4px;
+  --pl-space-sm: 8px;
+  --pl-space-md: 12px;
+  --pl-space-lg: 16px;
+  --pl-space-xl: 24px;
+  --pl-space-2xl: 32px;
+
+  /* Radii */
+  --pl-radius-sm: 4px;
+  --pl-radius-md: 6px;
+  --pl-radius-lg: 8px;
+
+  /* Transitions */
+  --pl-transition-fast: 100ms ease;
+  --pl-transition-normal: 150ms ease;
+  --pl-transition-slow: 200ms ease;
+
+  /* Panel */
+  --pl-panel-header-height: 36px;
+}
+
+[data-theme="light"] {
+  --pl-bg: #f8f8f8;
+  --pl-bg-raised: #ffffff;
+  --pl-bg-overlay: #f0f0f0;
+  --pl-bg-hover: rgba(0, 0, 0, 0.03);
+  --pl-bg-active: rgba(0, 0, 0, 0.05);
+
+  --pl-border: rgba(0, 0, 0, 0.08);
+  --pl-border-strong: rgba(0, 0, 0, 0.12);
+
+  --pl-text-primary: #1a1a1a;
+  --pl-text-secondary: #6b6b6b;
+  --pl-text-tertiary: #999999;
+  --pl-text-inverse: #ffffff;
+
+  --pl-accent: #5e6ad2;
+  --pl-accent-hover: #4f5bc4;
+  --pl-accent-subtle: rgba(94, 106, 210, 0.1);
+
+  --pl-selected: rgba(94, 106, 210, 0.12);
+  --pl-selected-border: #5e6ad2;
+
+  --pl-pick: #3a8c3e;
+  --pl-pick-subtle: rgba(58, 140, 62, 0.1);
+  --pl-reject: #d1352b;
+  --pl-reject-subtle: rgba(209, 53, 43, 0.1);
+  --pl-star: #b8922a;
+
+  --pl-label-red: #c74e4e;
+  --pl-label-yellow: #b8922a;
+  --pl-label-green: #3a8c3e;
+  --pl-label-blue: #3a6bb5;
+  --pl-label-purple: #7a4eb5;
+
+  --pl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --pl-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --pl-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+}

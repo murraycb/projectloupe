@@ -2,8 +2,13 @@ import { useMemo } from 'react';
 import { useImageStore } from '../stores/imageStore';
 import './StatusBar.css';
 
-function StatusBar() {
-  const { images, selectedIds, filters } = useImageStore();
+interface StatusBarProps {
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
+}
+
+function StatusBar({ theme, onToggleTheme }: StatusBarProps) {
+  const { images, selectedIds, filters, overlayMode } = useImageStore();
 
   const stats = useMemo(() => {
     const total = images.length;
@@ -23,22 +28,18 @@ function StatusBar() {
     return { total, filtered, picks, rejects, rated, bursts };
   }, [images, filters]);
 
-  const hasImages = images.length > 0;
-
   return (
     <div className="status-bar">
       <div className="status-left">
-        {hasImages ? (
+        {images.length > 0 ? (
           <>
             <span className="status-item">
               {stats.filtered === stats.total
                 ? `${stats.total} images`
-                : `${stats.filtered} of ${stats.total} images`}
+                : `${stats.filtered} of ${stats.total}`}
             </span>
             {stats.bursts > 0 && (
-              <span className="status-item dim">
-                {stats.bursts} burst{stats.bursts !== 1 ? 's' : ''}
-              </span>
+              <span className="status-item dim">{stats.bursts} bursts</span>
             )}
           </>
         ) : (
@@ -48,35 +49,27 @@ function StatusBar() {
 
       <div className="status-center">
         {selectedIds.size > 0 && (
-          <span className="status-item">
-            {selectedIds.size} selected
-          </span>
+          <span className="status-item">{selectedIds.size} selected</span>
         )}
       </div>
 
       <div className="status-right">
-        {hasImages && (
-          <>
-            {stats.picks > 0 && (
-              <span className="status-item pick">
-                <span className="status-dot pick"></span>
-                {stats.picks} picks
-              </span>
-            )}
-            {stats.rejects > 0 && (
-              <span className="status-item reject">
-                <span className="status-dot reject"></span>
-                {stats.rejects} rejects
-              </span>
-            )}
-            {stats.rated > 0 && (
-              <span className="status-item">
-                <span className="star-mini">★</span>
-                {stats.rated} rated
-              </span>
-            )}
-          </>
+        <span className="status-item dim">
+          Overlay: {overlayMode} (J)
+        </span>
+        {stats.picks > 0 && (
+          <span className="status-item pick">
+            {stats.picks} picks
+          </span>
         )}
+        {stats.rejects > 0 && (
+          <span className="status-item reject">
+            {stats.rejects} rejects
+          </span>
+        )}
+        <button className="status-theme-btn" onClick={onToggleTheme} title="Toggle theme (⌘⇧T)">
+          {theme === 'dark' ? '☀' : '☾'}
+        </button>
       </div>
     </div>
   );

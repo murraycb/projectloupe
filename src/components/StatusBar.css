@@ -2,11 +2,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px;
-  background-color: #1e1e1e;
-  border-top: 1px solid #2a2a2a;
+  padding: 4px var(--pl-space-lg);
+  background: var(--pl-bg-raised);
+  border-top: 1px solid var(--pl-border);
   flex-shrink: 0;
-  min-height: 28px;
+  min-height: 26px;
 }
 
 .status-left,
@@ -14,58 +14,35 @@
 .status-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--pl-space-md);
 }
 
-.status-left {
-  flex: 1;
-}
-
-.status-center {
-  flex: 0;
-  white-space: nowrap;
-}
-
-.status-right {
-  flex: 1;
-  justify-content: flex-end;
-}
+.status-left { flex: 1; }
+.status-center { flex: 0; white-space: nowrap; }
+.status-right { flex: 1; justify-content: flex-end; }
 
 .status-item {
   font-size: 11px;
-  color: #999999;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  color: var(--pl-text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
-.status-item.dim {
-  color: #666666;
+.status-item.dim { color: var(--pl-text-tertiary); }
+.status-item.pick { color: var(--pl-pick); }
+.status-item.reject { color: var(--pl-reject); }
+
+.status-theme-btn {
+  background: none;
+  border: none;
+  color: var(--pl-text-tertiary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: var(--pl-radius-sm);
+  transition: all var(--pl-transition-fast);
 }
 
-.status-item.pick {
-  color: #78b878;
-}
-
-.status-item.reject {
-  color: #c87070;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.status-dot.pick {
-  background-color: #4caf50;
-}
-
-.status-dot.reject {
-  background-color: #f44336;
-}
-
-.star-mini {
-  color: #ffd700;
-  font-size: 10px;
+.status-theme-btn:hover {
+  background: var(--pl-bg-hover);
+  color: var(--pl-text-primary);
 }
