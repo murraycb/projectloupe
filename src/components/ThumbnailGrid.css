@@ -35,3 +35,25 @@
   color: var(--pl-text-tertiary);
   margin: 0;
 }
+
+.camera-header {
+  display: flex;
+  align-items: center;
+  gap: var(--pl-space-sm);
+  padding: var(--pl-space-xs) 0;
+  border-bottom: 1px solid var(--pl-border);
+  margin-bottom: var(--pl-space-xs);
+}
+
+.camera-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pl-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.camera-count {
+  font-size: 11px;
+  color: var(--pl-text-tertiary);
+}

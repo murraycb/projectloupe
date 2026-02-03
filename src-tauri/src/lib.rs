@@ -1,2 +1,1 @@
-// Tauri doesn't have a lib.rs by default, but we can export public types here if needed
-pub use burst_detection::{BurstGroup, BurstDetector, BurstConfig, ImageInfo, ImageMetadata, QualityScore, QualityAnalyzer};
+pub use burst_detection::{BurstGroup, BurstDetector, BurstResult, CameraInfo, ExifData, DriveMode, ExiftoolRunner, QualityScore, QualityAnalyzer};

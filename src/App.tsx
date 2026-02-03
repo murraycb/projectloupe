@@ -10,8 +10,8 @@ import CommandPalette from './components/CommandPalette';
 import './App.css';
 
 // Dockview panel wrappers
-const GridPanel = (props: IDockviewPanelProps) => <ThumbnailGrid />;
-const InfoPanel = (props: IDockviewPanelProps) => <MetadataPanel />;
+const GridPanel = (_props: IDockviewPanelProps) => <ThumbnailGrid />;
+const InfoPanel = (_props: IDockviewPanelProps) => <MetadataPanel />;
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -26,7 +26,6 @@ function App() {
     toggleBurstExpand,
     selectedIds,
     expandedBursts,
-    overlayMode,
     cycleOverlayMode,
   } = useImageStore();
 

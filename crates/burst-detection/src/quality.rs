@@ -143,6 +143,7 @@ impl Default for QualityAnalyzer {
 
 /// Specialized algorithms for photography-specific quality metrics
 pub mod algorithms {
+    #[allow(unused_imports)]
     use super::*;
     
     /// Calculate sharpness using Laplacian variance method

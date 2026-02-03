@@ -91,3 +91,32 @@
   font-weight: 500;
   font-size: 13px;
 }
+
+.mock-button {
+  margin-top: var(--pl-space-md);
+  padding: var(--pl-space-xs) var(--pl-space-md);
+  font-size: 11px;
+  color: var(--pl-text-tertiary);
+  background: transparent;
+  border: 1px solid var(--pl-border);
+  border-radius: var(--pl-radius-sm);
+  cursor: pointer;
+  transition: all var(--pl-transition-fast);
+}
+
+.mock-button:hover {
+  color: var(--pl-text-secondary);
+  border-color: var(--pl-border-strong);
+}
+
+.import-error {
+  margin-top: var(--pl-space-sm);
+  padding: var(--pl-space-xs) var(--pl-space-sm);
+  background: rgba(229, 62, 62, 0.1);
+  border-radius: var(--pl-radius-sm);
+}
+
+.import-error p {
+  color: var(--pl-reject);
+  font-size: 12px;
+}

@@ -57,12 +57,12 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
           <span className="thumb-filename">{image.filename}</span>
           {(overlayMode === 'standard' || overlayMode === 'full') && (
             <span className="thumb-exif-brief">
-              {image.exif.shutterSpeed} · f/{image.exif.aperture}
+              {[image.exif.shutterSpeed, image.exif.aperture != null ? `f/${image.exif.aperture}` : null].filter(Boolean).join(' · ') || '—'}
             </span>
           )}
           {overlayMode === 'full' && (
             <span className="thumb-exif-full">
-              ISO {image.exif.iso} · {image.exif.focalLength}mm
+              {[image.exif.iso != null ? `ISO ${image.exif.iso}` : null, image.exif.focalLength != null ? `${image.exif.focalLength}mm` : null].filter(Boolean).join(' · ') || '—'}
             </span>
           )}
         </div>

@@ -24,7 +24,7 @@ function CommandPalette({ onClose }: CommandPaletteProps) {
     setFlag,
     setColorLabel,
     clearFilters,
-    importImages,
+    importFolder,
     images,
     cycleOverlayMode,
   } = useImageStore();
@@ -49,8 +49,8 @@ function CommandPalette({ onClose }: CommandPaletteProps) {
     { id: 'cycle-overlay', label: 'Cycle Info Overlay', shortcut: 'J', category: 'View', action: cycleOverlayMode },
     { id: 'clear-filters', label: 'Clear All Filters', category: 'View', action: clearFilters },
     // File
-    ...(images.length === 0 ? [{ id: 'import', label: 'Import Photos', category: 'File', action: importImages }] : []),
-  ], [selectedArray, setFlag, setRating, setColorLabel, clearFilters, importImages, images, cycleOverlayMode]);
+    { id: 'import', label: 'Import Photos', category: 'File', action: importFolder },
+  ], [selectedArray, setFlag, setRating, setColorLabel, clearFilters, importFolder, images, cycleOverlayMode]);
 
   const filtered = useMemo(() => {
     if (!query) return commands;

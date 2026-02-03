@@ -1,12 +1,13 @@
 //! Burst detection and image quality analysis library for ProjectLoupe
 //! 
 //! This crate provides functionality to detect burst sequences in photo collections
-//! and analyze image quality metrics.
+//! based on EXIF drive mode analysis and camera serial number partitioning,
+//! along with AI-powered image quality metrics.
 
+pub mod exif;
 pub mod burst;
-pub mod image_info;
 pub mod quality;
 
-pub use burst::{BurstGroup, BurstDetector, BurstConfig};
-pub use image_info::{ImageInfo, ImageMetadata};
+pub use exif::{ExifData, DriveMode, ExiftoolRunner};
+pub use burst::{BurstGroup, BurstDetector, BurstResult, CameraInfo};
 pub use quality::{QualityScore, QualityAnalyzer};

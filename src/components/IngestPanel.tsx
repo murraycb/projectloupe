@@ -1,52 +1,28 @@
-import { useState } from 'react';
 import { useImageStore } from '../stores/imageStore';
 import './IngestPanel.css';
 
 function IngestPanel() {
-  const { importImages } = useImageStore();
-  const [isDragging, setIsDragging] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleImport();
-  };
+  const { importFolder, importMock, isImporting, importError } = useImageStore();
 
   const handleClick = () => {
-    handleImport();
+    importFolder();
   };
 
-  const handleImport = async () => {
-    setIsImporting(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    importImages();
-    setIsImporting(false);
+  const handleMock = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    importMock();
   };
 
   return (
     <div className="ingest-panel-inline">
       <div
-        className={`drop-zone ${isDragging ? 'dragging' : ''} ${isImporting ? 'importing' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={handleClick}
+        className={`drop-zone ${isImporting ? 'importing' : ''}`}
+        onClick={!isImporting ? handleClick : undefined}
       >
         {isImporting ? (
           <div className="import-progress">
             <div className="spinner"></div>
-            <p>Importing images...</p>
+            <p>Scanning folder and detecting bursts…</p>
           </div>
         ) : (
           <>
@@ -56,9 +32,17 @@ function IngestPanel() {
               </svg>
             </div>
             <h3>Import Photos</h3>
-            <p>Drop a folder here or click to browse</p>
-            <p className="hint">Supports RAW and JPEG formats</p>
+            <p>Click to select a folder</p>
+            <p className="hint">Supports RAW (CR3, NEF, ARW, DNG, RAF) and JPEG</p>
+            <button className="mock-button" onClick={handleMock}>
+              Load mock data
+            </button>
           </>
+        )}
+        {importError && (
+          <div className="import-error">
+            <p>{importError}</p>
+          </div>
         )}
       </div>
     </div>

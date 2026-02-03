@@ -1,370 +1,426 @@
 //! Burst detection and grouping for ProjectLoupe
 //! 
-//! This module implements the core MVP feature: auto-detecting burst sequences
-//! from EXIF timing data and providing AI-powered best-pick suggestions.
+//! This module implements burst detection based on camera serial number partitioning
+//! and EXIF drive mode analysis for accurate burst identification.
 
-use std::path::Path;
-use chrono::{DateTime, Utc, Duration};
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use anyhow::{Result, Context};
-use crate::image_info::ImageInfo;
-use crate::quality::QualityScore;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BurstConfig {
-    /// Maximum time gap between consecutive shots to consider them part of the same burst (milliseconds)
-    pub max_gap_ms: i64,
-    /// Minimum number of shots to constitute a burst
-    pub min_burst_size: usize,
-    /// Maximum number of shots in a single burst before splitting
-    pub max_burst_size: usize,
-}
-
-impl Default for BurstConfig {
-    fn default() -> Self {
-        Self {
-            // Based on typical camera burst rates:
-            // - High-end bodies: 10-20 fps (50-100ms gaps)
-            // - Mid-range: 5-10 fps (100-200ms gaps)
-            // - We use 2 seconds as a safe upper bound for manual trigger gaps
-            max_gap_ms: 2000,
-            min_burst_size: 3,
-            max_burst_size: 200, // Prevent massive groups from long sequences
-        }
-    }
-}
+use anyhow::Result;
+use crate::exif::ExifData;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BurstGroup {
     /// Unique identifier for this burst group
     pub id: String,
+    /// Camera serial number for this burst
+    pub camera_serial: String,
     /// Images in this burst, sorted by capture time
-    pub images: Vec<ImageInfo>,
-    /// Suggested best pick (index into images array)
-    pub best_pick_index: Option<usize>,
-    /// Average time gap between consecutive shots (ms)
-    pub avg_gap_ms: f64,
-    /// Duration of the entire burst sequence
+    pub images: Vec<ExifData>,
+    /// Number of frames in the burst
+    pub frame_count: usize,
+    /// Duration of the entire burst sequence (milliseconds)
     pub duration_ms: i64,
-    /// Quality-based ranking of all images in the burst
-    pub quality_ranking: Vec<usize>, // indices sorted by quality score
+    /// Average gap between consecutive shots (milliseconds)
+    pub avg_gap_ms: f64,
+    /// Estimated frames per second
+    pub estimated_fps: f64,
 }
 
 impl BurstGroup {
-    /// Get the best pick image, if available
-    pub fn best_pick(&self) -> Option<&ImageInfo> {
-        self.best_pick_index.and_then(|idx| self.images.get(idx))
-    }
-    
-    /// Get images ranked by quality (best first)
-    pub fn ranked_by_quality(&self) -> Vec<&ImageInfo> {
-        self.quality_ranking
-            .iter()
-            .filter_map(|&idx| self.images.get(idx))
-            .collect()
-    }
-    
-    /// Calculate statistics for this burst
-    pub fn stats(&self) -> BurstStats {
-        let count = self.images.len();
-        let duration = self.duration_ms;
-        let avg_fps = if duration > 0 { 
-            (count as f64 * 1000.0) / duration as f64 
-        } else { 
-            0.0 
-        };
+    /// Create a new burst group
+    pub fn new(id: String, camera_serial: String, mut images: Vec<ExifData>) -> Self {
+        // Sort images by capture time
+        images.sort_by_key(|img| img.capture_time);
         
-        BurstStats {
-            image_count: count,
-            duration_ms: duration,
-            avg_gap_ms: self.avg_gap_ms,
-            avg_fps,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BurstStats {
-    pub image_count: usize,
-    pub duration_ms: i64,
-    pub avg_gap_ms: f64,
-    pub avg_fps: f64,
-}
-
-pub struct BurstDetector {
-    config: BurstConfig,
-}
-
-impl BurstDetector {
-    pub fn new(config: BurstConfig) -> Self {
-        Self { config }
-    }
-    
-    pub fn with_default_config() -> Self {
-        Self::new(BurstConfig::default())
-    }
-    
-    /// Detect burst groups from a collection of images
-    pub fn detect_bursts(&self, mut images: Vec<ImageInfo>) -> Result<Vec<BurstGroup>> {
-        if images.is_empty() {
-            return Ok(Vec::new());
-        }
-        
-        // Sort by capture time
-        images.sort_by_key(|img| img.metadata.capture_time);
-        
-        let mut groups = Vec::new();
-        let mut current_group: Vec<ImageInfo> = Vec::new();
-        let mut group_id_counter = 0;
-        
-        for image in images {
-            if let Some(last_image) = current_group.last() {
-                let time_gap = image.metadata.capture_time
-                    .signed_duration_since(last_image.metadata.capture_time)
-                    .num_milliseconds();
-                
-                // Check if this image starts a new burst
-                if time_gap > self.config.max_gap_ms || 
-                   current_group.len() >= self.config.max_burst_size {
-                    // Finalize current group if it qualifies as a burst
-                    if current_group.len() >= self.config.min_burst_size {
-                        let burst_group = self.create_burst_group(
-                            format!("burst_{}", group_id_counter),
-                            current_group.clone(),
-                        )?;
-                        groups.push(burst_group);
-                        group_id_counter += 1;
-                    } else {
-                        // Add individual images as single-image "groups"
-                        for img in current_group.drain(..) {
-                            let single_group = self.create_burst_group(
-                                format!("single_{}", group_id_counter),
-                                vec![img],
-                            )?;
-                            groups.push(single_group);
-                            group_id_counter += 1;
-                        }
-                    }
-                    current_group.clear();
-                }
-            }
+        let frame_count = images.len();
+        let (duration_ms, avg_gap_ms, estimated_fps) = if frame_count > 1 {
+            let first_time = images.first().unwrap().capture_time;
+            let last_time = images.last().unwrap().capture_time;
+            let duration = last_time.signed_duration_since(first_time).num_milliseconds();
             
-            current_group.push(image);
-        }
-        
-        // Handle final group
-        if !current_group.is_empty() {
-            if current_group.len() >= self.config.min_burst_size {
-                let burst_group = self.create_burst_group(
-                    format!("burst_{}", group_id_counter),
-                    current_group,
-                )?;
-                groups.push(burst_group);
-            } else {
-                // Add remaining individual images
-                for img in current_group {
-                    let single_group = self.create_burst_group(
-                        format!("single_{}", group_id_counter),
-                        vec![img],
-                    )?;
-                    groups.push(single_group);
-                    group_id_counter += 1;
-                }
-            }
-        }
-        
-        Ok(groups)
-    }
-    
-    /// Create a BurstGroup from a list of images
-    fn create_burst_group(&self, id: String, images: Vec<ImageInfo>) -> Result<BurstGroup> {
-        if images.is_empty() {
-            return Err(anyhow::anyhow!("Cannot create burst group from empty image list"));
-        }
-        
-        let (avg_gap_ms, duration_ms) = if images.len() > 1 {
-            let gaps: Vec<i64> = images
-                .windows(2)
+            // Calculate gaps between consecutive images
+            let gaps: Vec<i64> = images.windows(2)
                 .map(|pair| {
-                    pair[1].metadata.capture_time
-                        .signed_duration_since(pair[0].metadata.capture_time)
-                        .num_milliseconds()
+                    pair[1].capture_time.signed_duration_since(pair[0].capture_time).num_milliseconds()
                 })
                 .collect();
             
-            let avg_gap = gaps.iter().sum::<i64>() as f64 / gaps.len() as f64;
-            let total_duration = images.last().unwrap().metadata.capture_time
-                .signed_duration_since(images.first().unwrap().metadata.capture_time)
-                .num_milliseconds();
+            let avg_gap = if !gaps.is_empty() {
+                gaps.iter().sum::<i64>() as f64 / gaps.len() as f64
+            } else {
+                0.0
+            };
             
-            (avg_gap, total_duration)
+            let fps = if duration > 0 {
+                (frame_count as f64 * 1000.0) / duration as f64
+            } else {
+                0.0
+            };
+            
+            (duration, avg_gap, fps)
         } else {
-            (0.0, 0)
+            (0, 0.0, 0.0)
         };
         
-        // Generate quality-based ranking
-        let mut quality_ranking: Vec<(usize, f64)> = images
-            .iter()
-            .enumerate()
-            .map(|(idx, img)| (idx, img.quality_score.map_or(0.0, |q| q.overall_score)))
-            .collect();
-        
-        // Sort by quality score (highest first)
-        quality_ranking.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
-        let quality_ranking: Vec<usize> = quality_ranking.into_iter().map(|(idx, _)| idx).collect();
-        let best_pick_index = if images.len() > 1 { quality_ranking.first().copied() } else { None };
-        
-        Ok(BurstGroup {
+        Self {
             id,
+            camera_serial,
             images,
-            best_pick_index,
-            avg_gap_ms,
+            frame_count,
             duration_ms,
-            quality_ranking,
-        })
+            avg_gap_ms,
+            estimated_fps,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraInfo {
+    /// Camera serial number
+    pub serial: String,
+    /// Camera make
+    pub make: String,
+    /// Camera model
+    pub model: String,
+    /// Total number of images from this camera
+    pub image_count: usize,
+    /// Number of burst groups from this camera
+    pub burst_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BurstResult {
+    /// Detected burst groups
+    pub bursts: Vec<BurstGroup>,
+    /// Single images (not part of any burst)
+    pub singles: Vec<ExifData>,
+    /// Camera information summary
+    pub cameras: Vec<CameraInfo>,
+}
+
+impl BurstResult {
+    /// Get total number of images processed
+    pub fn total_images(&self) -> usize {
+        self.bursts.iter().map(|b| b.frame_count).sum::<usize>() + self.singles.len()
     }
     
-    /// Update burst groups with new quality scores
-    pub fn update_quality_rankings(&self, groups: &mut [BurstGroup]) {
-        for group in groups {
-            if group.images.len() <= 1 {
-                continue;
-            }
-            
-            let mut quality_ranking: Vec<(usize, f64)> = group.images
-                .iter()
-                .enumerate()
-                .map(|(idx, img)| (idx, img.quality_score.map_or(0.0, |q| q.overall_score)))
-                .collect();
-            
-            quality_ranking.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            
-            group.quality_ranking = quality_ranking.into_iter().map(|(idx, _)| idx).collect();
-            group.best_pick_index = group.quality_ranking.first().copied();
+    /// Get total number of burst groups
+    pub fn total_bursts(&self) -> usize {
+        self.bursts.len()
+    }
+    
+    /// Get camera information for a specific serial number
+    pub fn camera_info(&self, serial: &str) -> Option<&CameraInfo> {
+        self.cameras.iter().find(|c| c.serial == serial)
+    }
+}
+
+pub struct BurstDetector;
+
+impl BurstDetector {
+    /// Detect burst groups from a collection of images
+    pub fn detect(images: Vec<ExifData>) -> Result<BurstResult> {
+        if images.is_empty() {
+            return Ok(BurstResult {
+                bursts: Vec::new(),
+                singles: Vec::new(),
+                cameras: Vec::new(),
+            });
         }
+
+        // Step 1: Partition images by camera serial number
+        let mut camera_partitions: HashMap<String, Vec<ExifData>> = HashMap::new();
+        for image in images {
+            camera_partitions.entry(image.serial_number.clone())
+                .or_default()
+                .push(image);
+        }
+
+        let mut all_bursts = Vec::new();
+        let mut all_singles = Vec::new();
+        let mut cameras = Vec::new();
+        let mut burst_id_counter = 0;
+        let mut single_id_counter = 0;
+
+        // Step 2: Process each camera partition independently
+        for (serial, mut camera_images) in camera_partitions {
+            // Sort by capture time within this camera
+            camera_images.sort_by_key(|img| img.capture_time);
+            
+            // Extract camera info from the first image
+            let camera_info = {
+                let first_img = &camera_images[0];
+                CameraInfo {
+                    serial: serial.clone(),
+                    make: first_img.make.clone().unwrap_or_else(|| "Unknown".to_string()),
+                    model: first_img.model.clone().unwrap_or_else(|| "Unknown".to_string()),
+                    image_count: camera_images.len(),
+                    burst_count: 0, // Will be updated below
+                }
+            };
+
+            // Step 3: Detect bursts within this camera's images
+            let (camera_bursts, camera_singles) = Self::detect_bursts_for_camera(
+                camera_images, 
+                &serial, 
+                &mut burst_id_counter, 
+                &mut single_id_counter
+            );
+
+            // Update camera info with actual burst count
+            let mut camera_info = camera_info;
+            camera_info.burst_count = camera_bursts.len();
+            
+            all_bursts.extend(camera_bursts);
+            all_singles.extend(camera_singles);
+            cameras.push(camera_info);
+        }
+
+        Ok(BurstResult {
+            bursts: all_bursts,
+            singles: all_singles,
+            cameras,
+        })
+    }
+
+    /// Detect bursts within a single camera's images
+    fn detect_bursts_for_camera(
+        images: Vec<ExifData>, 
+        camera_serial: &str,
+        burst_id_counter: &mut usize,
+        _single_id_counter: &mut usize,
+    ) -> (Vec<BurstGroup>, Vec<ExifData>) {
+        let mut bursts = Vec::new();
+        let mut singles = Vec::new();
+        let mut current_burst: Vec<ExifData> = Vec::new();
+
+        for image in images {
+            let should_extend_burst = if let Some(last_image) = current_burst.last() {
+                // Check if this image extends the current burst:
+                // 1. Both images must be in continuous drive mode
+                // 2. Previous image was also continuous
+                image.drive_mode.is_continuous() && last_image.drive_mode.is_continuous()
+            } else {
+                // First image in potential burst
+                image.drive_mode.is_continuous()
+            };
+
+            if should_extend_burst {
+                // Extend current burst
+                current_burst.push(image);
+            } else {
+                // End current burst (if it has enough frames) and start fresh
+                if current_burst.len() >= 2 {
+                    // Finalize the burst
+                    let burst = BurstGroup::new(
+                        format!("burst_{}", burst_id_counter),
+                        camera_serial.to_string(),
+                        current_burst.clone(),
+                    );
+                    bursts.push(burst);
+                    *burst_id_counter += 1;
+                } else {
+                    // Add any single images from the incomplete burst to singles
+                    for img in current_burst.drain(..) {
+                        singles.push(img);
+                    }
+                }
+
+                current_burst.clear();
+
+                // Start new potential burst if this image is continuous
+                if image.drive_mode.is_continuous() {
+                    current_burst.push(image);
+                } else {
+                    // Single shot image
+                    singles.push(image);
+                }
+            }
+        }
+
+        // Handle final burst
+        if current_burst.len() >= 2 {
+            let burst = BurstGroup::new(
+                format!("burst_{}", burst_id_counter),
+                camera_serial.to_string(),
+                current_burst,
+            );
+            bursts.push(burst);
+            *burst_id_counter += 1;
+        } else {
+            // Add remaining images to singles
+            for img in current_burst {
+                singles.push(img);
+            }
+        }
+
+        (bursts, singles)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
-    use crate::image_info::{ImageMetadata, ImageInfo};
+    use crate::exif::{ExifData, DriveMode};
+    use chrono::{Utc, TimeZone};
     use std::path::PathBuf;
-    
-    fn create_test_image(path: &str, timestamp_secs: i64) -> ImageInfo {
-        ImageInfo {
-            path: PathBuf::from(path),
-            metadata: ImageMetadata {
-                capture_time: Utc.timestamp_opt(timestamp_secs, 0).unwrap(),
-                camera_make: Some("Canon".to_string()),
-                camera_model: Some("EOS R5".to_string()),
-                lens_model: None,
-                focal_length: None,
-                aperture: None,
-                shutter_speed: None,
-                iso: None,
-                file_size: 25 * 1024 * 1024, // 25MB
-            },
-            quality_score: Some(QualityScore {
-                overall_score: 0.8,
-                sharpness: 0.8,
-                exposure: 0.7,
-                composition: 0.9,
-                technical_quality: 0.8,
-            }),
+
+    fn create_test_image(
+        path: &str, 
+        serial: &str, 
+        drive_mode: DriveMode, 
+        timestamp_secs: i64
+    ) -> ExifData {
+        ExifData::new(
+            PathBuf::from(path),
+            serial.to_string(),
+            drive_mode,
+            Utc.timestamp_opt(timestamp_secs, 0).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_all_single_shot_images() {
+        let images = vec![
+            create_test_image("img001.jpg", "camera1", DriveMode::Single, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::Single, 1005),
+            create_test_image("img003.jpg", "camera1", DriveMode::Single, 1010),
+        ];
+
+        let result = BurstDetector::detect(images).unwrap();
+        
+        assert_eq!(result.bursts.len(), 0);
+        assert_eq!(result.singles.len(), 3);
+        assert_eq!(result.cameras.len(), 1);
+        assert_eq!(result.cameras[0].burst_count, 0);
+    }
+
+    #[test]
+    fn test_continuous_sequence_single_burst() {
+        let images = vec![
+            create_test_image("img001.jpg", "camera1", DriveMode::ContinuousHigh, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::ContinuousHigh, 1001),
+            create_test_image("img003.jpg", "camera1", DriveMode::ContinuousHigh, 1002),
+            create_test_image("img004.jpg", "camera1", DriveMode::ContinuousHigh, 1003),
+        ];
+
+        let result = BurstDetector::detect(images).unwrap();
+        
+        assert_eq!(result.bursts.len(), 1);
+        assert_eq!(result.singles.len(), 0);
+        assert_eq!(result.bursts[0].frame_count, 4);
+        assert_eq!(result.bursts[0].camera_serial, "camera1");
+        assert!(result.bursts[0].estimated_fps > 0.0);
+        assert_eq!(result.cameras[0].burst_count, 1);
+    }
+
+    #[test]
+    fn test_mixed_single_continuous_split() {
+        let images = vec![
+            create_test_image("img001.jpg", "camera1", DriveMode::Single, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::ContinuousHigh, 1005),
+            create_test_image("img003.jpg", "camera1", DriveMode::ContinuousHigh, 1006),
+            create_test_image("img004.jpg", "camera1", DriveMode::ContinuousHigh, 1007),
+            create_test_image("img005.jpg", "camera1", DriveMode::Single, 1015),
+        ];
+
+        let result = BurstDetector::detect(images).unwrap();
+        
+        assert_eq!(result.bursts.len(), 1);
+        assert_eq!(result.singles.len(), 2); // First and last image
+        assert_eq!(result.bursts[0].frame_count, 3);
+        assert_eq!(result.cameras[0].burst_count, 1);
+    }
+
+    #[test]
+    fn test_two_camera_serials_independent() {
+        let images = vec![
+            // Camera 1 burst
+            create_test_image("img001.jpg", "camera1", DriveMode::ContinuousHigh, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::ContinuousHigh, 1001),
+            create_test_image("img003.jpg", "camera1", DriveMode::ContinuousHigh, 1002),
+            // Camera 2 burst
+            create_test_image("img004.jpg", "camera2", DriveMode::ContinuousLow, 1005),
+            create_test_image("img005.jpg", "camera2", DriveMode::ContinuousLow, 1006),
+        ];
+
+        let result = BurstDetector::detect(images).unwrap();
+        
+        assert_eq!(result.bursts.len(), 2);
+        assert_eq!(result.singles.len(), 0);
+        assert_eq!(result.cameras.len(), 2);
+        
+        // Check that bursts are from different cameras
+        let serials: Vec<&str> = result.bursts.iter().map(|b| b.camera_serial.as_str()).collect();
+        assert!(serials.contains(&"camera1"));
+        assert!(serials.contains(&"camera2"));
+        
+        // Each camera should have 1 burst
+        for camera in &result.cameras {
+            assert_eq!(camera.burst_count, 1);
         }
     }
-    
+
     #[test]
-    fn test_single_burst_detection() {
-        let detector = BurstDetector::with_default_config();
-        
-        // Create a burst: 5 images taken 100ms apart
-        let base_time = 1640995200; // 2022-01-01 00:00:00 UTC
+    fn test_burst_stats_calculation() {
         let images = vec![
-            create_test_image("img001.cr3", base_time),
-            create_test_image("img002.cr3", base_time + 0), // Same second (100ms gap simulated)
-            create_test_image("img003.cr3", base_time + 0),
-            create_test_image("img004.cr3", base_time + 1),
-            create_test_image("img005.cr3", base_time + 1),
+            create_test_image("img001.jpg", "camera1", DriveMode::ContinuousHigh, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::ContinuousHigh, 1001),
+            create_test_image("img003.jpg", "camera1", DriveMode::ContinuousHigh, 1002),
+            create_test_image("img004.jpg", "camera1", DriveMode::ContinuousHigh, 1004), // 2 second gap
         ];
+
+        let result = BurstDetector::detect(images).unwrap();
+        let burst = &result.bursts[0];
         
-        let groups = detector.detect_bursts(images).unwrap();
-        
-        assert_eq!(groups.len(), 1);
-        let burst = &groups[0];
-        assert_eq!(burst.images.len(), 5);
-        assert!(burst.best_pick_index.is_some());
-        assert_eq!(burst.quality_ranking.len(), 5);
+        assert_eq!(burst.frame_count, 4);
+        assert_eq!(burst.duration_ms, 4000); // 4 seconds total
+        assert_eq!(burst.avg_gap_ms, (1000.0 + 1000.0 + 2000.0) / 3.0); // Average of gaps
+        assert_eq!(burst.estimated_fps, 1.0); // 4 frames in 4 seconds = 1 fps
     }
-    
+
     #[test]
-    fn test_multiple_bursts() {
-        let detector = BurstDetector::with_default_config();
-        
-        let base_time = 1640995200;
+    fn test_minimum_burst_size_two_frames() {
         let images = vec![
-            // First burst (3 images)
-            create_test_image("img001.cr3", base_time),
-            create_test_image("img002.cr3", base_time + 1),
-            create_test_image("img003.cr3", base_time + 1),
-            // Gap of 10 seconds
-            // Second burst (4 images)  
-            create_test_image("img004.cr3", base_time + 10),
-            create_test_image("img005.cr3", base_time + 10),
-            create_test_image("img006.cr3", base_time + 11),
-            create_test_image("img007.cr3", base_time + 11),
+            create_test_image("img001.jpg", "camera1", DriveMode::ContinuousHigh, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::ContinuousHigh, 1001),
         ];
+
+        let result = BurstDetector::detect(images).unwrap();
         
-        let groups = detector.detect_bursts(images).unwrap();
-        
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[0].images.len(), 3);
-        assert_eq!(groups[1].images.len(), 4);
+        assert_eq!(result.bursts.len(), 1);
+        assert_eq!(result.singles.len(), 0);
+        assert_eq!(result.bursts[0].frame_count, 2);
     }
-    
+
     #[test]
-    fn test_no_burst_individual_images() {
-        let detector = BurstDetector::with_default_config();
-        
-        let base_time = 1640995200;
+    fn test_single_continuous_frame_not_burst() {
         let images = vec![
-            create_test_image("img001.cr3", base_time),
-            create_test_image("img002.cr3", base_time + 10), // 10 second gap
-            create_test_image("img003.cr3", base_time + 20), // Another 10 second gap
+            create_test_image("img001.jpg", "camera1", DriveMode::ContinuousHigh, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::Single, 1005),
         ];
+
+        let result = BurstDetector::detect(images).unwrap();
         
-        let groups = detector.detect_bursts(images).unwrap();
-        
-        // Should create 3 individual groups since gaps are too large
-        assert_eq!(groups.len(), 3);
-        for group in &groups {
-            assert_eq!(group.images.len(), 1);
-            assert!(group.best_pick_index.is_none()); // No best pick for single images
-        }
+        assert_eq!(result.bursts.len(), 0);
+        assert_eq!(result.singles.len(), 2);
     }
-    
+
     #[test]
-    fn test_burst_stats() {
-        let detector = BurstDetector::with_default_config();
-        
-        let base_time = 1640995200;
+    fn test_burst_result_stats() {
         let images = vec![
-            create_test_image("img001.cr3", base_time),
-            create_test_image("img002.cr3", base_time + 1),
-            create_test_image("img003.cr3", base_time + 2),
-            create_test_image("img004.cr3", base_time + 3),
-            create_test_image("img005.cr3", base_time + 4),
+            create_test_image("img001.jpg", "camera1", DriveMode::ContinuousHigh, 1000),
+            create_test_image("img002.jpg", "camera1", DriveMode::ContinuousHigh, 1001),
+            create_test_image("img003.jpg", "camera1", DriveMode::Single, 1010),
         ];
+
+        let result = BurstDetector::detect(images).unwrap();
         
-        let groups = detector.detect_bursts(images).unwrap();
-        let burst = &groups[0];
-        let stats = burst.stats();
+        assert_eq!(result.total_images(), 3);
+        assert_eq!(result.total_bursts(), 1);
         
-        assert_eq!(stats.image_count, 5);
-        assert_eq!(stats.duration_ms, 4000); // 4 seconds total
-        assert!(stats.avg_fps > 1.0 && stats.avg_fps < 2.0); // ~1.25 fps
+        let camera_info = result.camera_info("camera1").unwrap();
+        assert_eq!(camera_info.image_count, 3);
+        assert_eq!(camera_info.burst_count, 1);
     }
 }
