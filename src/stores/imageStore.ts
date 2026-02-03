@@ -8,8 +8,6 @@ interface ImageStore {
   selectedIds: Set<string>;
   expandedBursts: Set<string>;
   filters: FilterState;
-  isImportPanelVisible: boolean;
-
   // Actions
   setRating: (imageId: string, rating: number) => void;
   setFlag: (imageId: string, flag: 'none' | 'pick' | 'reject') => void;
@@ -21,7 +19,6 @@ interface ImageStore {
   setFilter: (filterKey: keyof FilterState, value: any) => void;
   clearFilters: () => void;
   importImages: () => void;
-  hideImportPanel: () => void;
 }
 
 export const useImageStore = create<ImageStore>((set, get) => ({
@@ -29,7 +26,6 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   images: [],
   selectedIds: new Set(),
   expandedBursts: new Set(),
-  isImportPanelVisible: true,
   filters: {
     minRating: 0,
     flags: new Set(),
@@ -127,13 +123,6 @@ export const useImageStore = create<ImageStore>((set, get) => ({
 
   importImages: () => {
     const mockImages = generateMockImages();
-    set({
-      images: mockImages,
-      isImportPanelVisible: false,
-    });
-  },
-
-  hideImportPanel: () => {
-    set({ isImportPanelVisible: false });
+    set({ images: mockImages });
   },
 }));

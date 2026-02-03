@@ -1,9 +1,10 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect, useState } from 'react';
 import { useImageStore } from '../stores/imageStore';
 import { ImageEntry, BurstGroupData } from '../types';
 import ThumbnailCard from './ThumbnailCard';
 import BurstGroup from './BurstGroup';
+import IngestPanel from './IngestPanel';
 import './ThumbnailGrid.css';
 
 type DisplayItem = {
@@ -14,7 +15,22 @@ type DisplayItem = {
 
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(5);
   const { images, filters, expandedBursts } = useImageStore();
+
+  // Responsive column count
+  useEffect(() => {
+    const updateColumns = () => {
+      if (parentRef.current) {
+        const width = parentRef.current.clientWidth;
+        setColumns(Math.max(2, Math.floor(width / 216))); // 200px + 16px gap
+      }
+    };
+    updateColumns();
+    const observer = new ResizeObserver(updateColumns);
+    if (parentRef.current) observer.observe(parentRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Filter images
   const filteredImages = useMemo(() => {
@@ -34,61 +50,54 @@ function ThumbnailGrid() {
 
     for (const image of filteredImages) {
       if (image.burstGroupId && !processedBursts.has(image.burstGroupId)) {
-        // This is part of a burst group
         const burstImages = filteredImages.filter(img => img.burstGroupId === image.burstGroupId);
         const isExpanded = expandedBursts.has(image.burstGroupId);
 
         if (isExpanded) {
-          // Show all images in the burst individually
           burstImages.forEach(img => {
-            items.push({
-              type: 'image',
-              data: img,
-              id: img.id,
-            });
+            items.push({ type: 'image', data: img, id: img.id });
           });
         } else {
-          // Show as a single burst group
           items.push({
             type: 'burst',
-            data: {
-              id: image.burstGroupId,
-              images: burstImages,
-              expanded: false,
-            },
+            data: { id: image.burstGroupId, images: burstImages, expanded: false },
             id: image.burstGroupId,
           });
         }
         processedBursts.add(image.burstGroupId);
       } else if (!image.burstGroupId) {
-        // Single image
-        items.push({
-          type: 'image',
-          data: image as ImageEntry,
-          id: image.id,
-        });
+        items.push({ type: 'image', data: image, id: image.id });
       }
     }
 
     return items;
   }, [filteredImages, expandedBursts]);
 
-  // Calculate grid layout
-  const COLUMNS = Math.floor((parentRef.current?.clientWidth || 1200) / 208); // 200px + 8px gap
-  const ITEM_HEIGHT = 250; // Height of each grid item
+  const ITEM_HEIGHT = 250;
 
   const virtualizer = useVirtualizer({
-    count: Math.ceil(displayItems.length / COLUMNS),
+    count: Math.ceil(displayItems.length / columns),
     getScrollElement: () => parentRef.current,
     estimateSize: () => ITEM_HEIGHT,
     overscan: 3,
   });
 
+  // Empty state — show IngestPanel inline
   if (images.length === 0) {
     return (
-      <div className="thumbnail-grid empty">
+      <div ref={parentRef} className="thumbnail-grid">
+        <IngestPanel />
+      </div>
+    );
+  }
+
+  // No results from filters
+  if (displayItems.length === 0) {
+    return (
+      <div ref={parentRef} className="thumbnail-grid">
         <div className="empty-state">
-          <p>No images loaded</p>
+          <p className="empty-title">No images match filters</p>
+          <p className="empty-hint">Try adjusting or clearing your filters</p>
         </div>
       </div>
     );
@@ -104,8 +113,8 @@ function ThumbnailGrid() {
         }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
-          const startIndex = virtualRow.index * COLUMNS;
-          const rowItems = displayItems.slice(startIndex, startIndex + COLUMNS);
+          const startIndex = virtualRow.index * columns;
+          const rowItems = displayItems.slice(startIndex, startIndex + columns);
 
           return (
             <div

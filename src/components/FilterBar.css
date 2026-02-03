@@ -7,6 +7,12 @@
   border-bottom: 1px solid #333333;
   flex-shrink: 0;
   overflow-x: auto;
+  transition: opacity 200ms ease;
+}
+
+.filter-bar.disabled {
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .filter-section {

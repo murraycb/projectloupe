@@ -42,8 +42,10 @@ function FilterBar() {
     filters.colorLabels.size > 0 || 
     filters.showBurstsOnly;
 
+  const hasImages = images.length > 0;
+
   return (
-    <div className="filter-bar">
+    <div className={`filter-bar ${!hasImages ? 'disabled' : ''}`}>
       <div className="filter-section">
         <label>Rating:</label>
         <div className="star-filters">

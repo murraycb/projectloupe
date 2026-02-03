@@ -7,3 +7,9 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   overflow: hidden;
 }
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}

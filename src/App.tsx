@@ -1,31 +1,31 @@
 import { useEffect } from 'react';
 import { useImageStore } from './stores/imageStore';
 import FilterBar from './components/FilterBar';
-import IngestPanel from './components/IngestPanel';
 import ThumbnailGrid from './components/ThumbnailGrid';
+import MetadataPanel from './components/MetadataPanel';
+import StatusBar from './components/StatusBar';
 import './App.css';
 
 function App() {
   const {
+    images,
     setRating,
     setFlag,
     setColorLabel,
     toggleBurstExpand,
     selectedIds,
-    isImportPanelVisible,
-    expandedBursts
+    expandedBursts,
   } = useImageStore();
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle shortcuts when not in an input field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
       const selectedArray = Array.from(selectedIds);
-      if (selectedArray.length === 0) return;
+      if (selectedArray.length === 0 && images.length > 0) return;
 
       switch (e.key.toLowerCase()) {
         case 'p':
@@ -67,7 +67,6 @@ function App() {
           break;
         case 'escape':
           e.preventDefault();
-          // Collapse all expanded bursts
           expandedBursts.forEach(burstId => toggleBurstExpand(burstId));
           break;
       }
@@ -75,13 +74,18 @@ function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setRating, setFlag, setColorLabel, selectedIds, expandedBursts, toggleBurstExpand]);
+  }, [setRating, setFlag, setColorLabel, selectedIds, expandedBursts, toggleBurstExpand, images]);
+
+  const hasImages = images.length > 0;
 
   return (
     <div className="app">
       <FilterBar />
-      {isImportPanelVisible && <IngestPanel />}
-      <ThumbnailGrid />
+      <div className="main-content">
+        <ThumbnailGrid />
+        <MetadataPanel />
+      </div>
+      <StatusBar />
     </div>
   );
 }
