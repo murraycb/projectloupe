@@ -1,0 +1,51 @@
+{
+  "productName": "ProjectLoupe",
+  "version": "0.1.0",
+  "identifier": "com.projectloupe.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "ProjectLoupe",
+        "label": "main",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "focus": true,
+        "transparent": false,
+        "maximized": false,
+        "visible": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "macOSPrivateApi": true
+  },
+  "bundle": {
+    "active": false
+  },
+  "plugins": {
+    "shell": {
+      "scope": [
+        {
+          "name": "shell:allow-open",
+          "cmd": "open",
+          "args": true
+        }
+      ]
+    }
+  }
+}
