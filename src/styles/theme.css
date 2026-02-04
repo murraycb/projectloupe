@@ -26,8 +26,8 @@
   --pl-accent-subtle: rgba(94, 106, 210, 0.15);
 
   /* Selection */
-  --pl-selected: rgba(94, 106, 210, 0.2);
-  --pl-selected-border: #5e6ad2;
+  --pl-selected: rgba(255, 255, 255, 0.08);
+  --pl-selected-border: rgba(255, 255, 255, 0.5);
 
   /* Status */
   --pl-pick: #4caf50;
@@ -94,8 +94,8 @@
   --pl-accent-hover: #4f5bc4;
   --pl-accent-subtle: rgba(94, 106, 210, 0.1);
 
-  --pl-selected: rgba(94, 106, 210, 0.12);
-  --pl-selected-border: #5e6ad2;
+  --pl-selected: rgba(0, 0, 0, 0.06);
+  --pl-selected-border: rgba(0, 0, 0, 0.35);
 
   --pl-pick: #3a8c3e;
   --pl-pick-subtle: rgba(58, 140, 62, 0.1);

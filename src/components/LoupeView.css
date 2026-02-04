@@ -243,7 +243,7 @@
 
 .filmstrip-thumb.active {
   opacity: 1;
-  outline-color: var(--pl-selected-border, #5e6ad2);
+  outline-color: var(--pl-selected-border, rgba(255, 255, 255, 0.5));
 }
 
 .filmstrip-thumb.flagged-pick {
