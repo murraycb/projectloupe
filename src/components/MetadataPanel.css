@@ -1,6 +1,6 @@
 .metadata-panel {
-  width: 280px;
   min-width: 280px;
+  max-width: 400px;
   background: var(--pl-bg-raised);
   border-left: 1px solid var(--pl-border);
   display: flex;
@@ -187,6 +187,10 @@
   color: var(--pl-text-primary);
   text-align: right;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .metadata-row .value.path {
