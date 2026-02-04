@@ -127,23 +127,30 @@ function ThumbnailGrid() {
 
   // Row height: computed exactly from thumbnailSize + overlay + card chrome.
   // No magic padding — cell height is deterministic for current overlay mode.
+  // Line heights are set explicitly in CSS to match these constants.
   //
   // Single card (ThumbnailCard):
   //   border: 2px × 2 = 4px
   //   image: thumbnailSize (1:1 square)
-  //   overlay: per J mode (thumb-info padding 8px + line heights)
+  //   overlay .thumb-info: padding 4+4, filename 16px, exif-brief 14px, exif-full 14px, gap 1px
   //
   // Burst card (BurstGroup collapsed):
-  //   stack-3 extends 6px below image-placeholder
+  //   stack-3 extends 6px below image-placeholder (absolute, not in flow)
   //   image: thumbnailSize (1:1 square)
-  //   burst info: always 2 lines = 34px (padding 8 + filename 14 + burst-info 12)
+  //   .image-info: padding 4+4, filename 16px, burst-info 14px
   //
-  // Overlay heights (from CSS: padding 4+4, filename 14px, exif lines 12px, gap 1px):
-  //   none: 0, minimal: 22, standard: 35, full: 48
-  const OVERLAY_HEIGHT: Record<string, number> = { none: 0, minimal: 22, standard: 35, full: 48 };
-  const BURST_INFO_HEIGHT = 34; // always-visible filename + burst info
+  // CSS line-heights (explicit, not browser default):
+  //   .thumb-filename / .filename: 16px (font-size 11px)
+  //   .thumb-exif-brief / .thumb-exif-full / .burst-info: 14px (font-size 10px)
+  const OVERLAY_HEIGHT: Record<string, number> = {
+    none: 0,
+    minimal: 24,  // pad 4 + filename 16 + pad 4
+    standard: 39, // pad 4 + filename 16 + gap 1 + exif-brief 14 + pad 4
+    full: 54,     // pad 4 + filename 16 + gap 1 + exif-brief 14 + gap 1 + exif-full 14 + pad 4
+  };
+  const BURST_INFO_HEIGHT = 38; // pad 4 + filename 16 + burst-info 14 + pad 4
   const CARD_BORDER = 4;        // 2px border × 2 (ThumbnailCard)
-  const BURST_STACK_BELOW = 6;  // stack-3 extends 6px below image-placeholder
+  const BURST_STACK_BELOW = 6;  // stack-3 visual overhang below image-placeholder
   const ROW_GAP = 8;            // var(--pl-space-sm) padding-bottom on .grid-row
 
   const singleCardHeight = thumbnailSize + CARD_BORDER + (OVERLAY_HEIGHT[overlayMode] ?? 0);
