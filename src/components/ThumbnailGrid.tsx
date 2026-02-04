@@ -156,7 +156,7 @@ function ThumbnailGrid() {
   }, [thumbnailSize, measureCells]);
 
   const ITEM_HEIGHT = measuredCellHeight + gridGap;
-  const HEADER_HEIGHT = measuredHeaderHeight + 8; // fixed chrome spacing — not user-configurable
+  const HEADER_HEIGHT = measuredHeaderHeight + 16; // fixed chrome spacing — matches container padding
 
   const rows = useMemo(() => {
     const result: { items: DisplayItem[]; height: number }[] = [];
