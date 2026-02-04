@@ -29,13 +29,26 @@
   overflow: hidden;
 }
 
+.thumb-swatch {
+  position: absolute;
+  inset: 0;
+}
+
 .thumb-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
+  opacity: 0;
+  transition: opacity 150ms ease-in;
 }
 
+.thumb-img.loaded {
+  opacity: 1;
+}
+
+/* Legacy placeholder - keep for backward compatibility */
 .thumb-placeholder {
   width: 100%;
   height: 100%;

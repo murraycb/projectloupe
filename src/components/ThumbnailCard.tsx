@@ -23,6 +23,10 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
     openLoupe(image.id);
   };
 
+  // Progressive thumbnail priority: preview > micro > legacy > none
+  const displayUrl = image.previewThumbnailUrl || image.microThumbnailUrl || image.thumbnailUrl;
+  const swatchColor = image.colorSwatch || `hsl(${hue}, 50%, ${brightness * 60 + 20}%)`;
+
   return (
     <div
       className={`thumb-card ${isSelected ? 'selected' : ''} ${image.flag !== 'none' ? image.flag : ''}`}
@@ -30,18 +34,21 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
       onDoubleClick={handleDoubleClick}
     >
       <div className="thumb-image">
-        {image.thumbnailUrl ? (
+        {/* Always-visible color swatch background */}
+        <div 
+          className="thumb-swatch" 
+          style={{ backgroundColor: swatchColor }} 
+        />
+        
+        {/* Thumbnail overlaid with crossfade */}
+        {displayUrl && (
           <img
             className="thumb-img"
-            src={image.thumbnailUrl}
+            src={displayUrl}
             alt={image.filename}
             loading="lazy"
             draggable={false}
-          />
-        ) : (
-          <div
-            className="thumb-placeholder"
-            style={{ backgroundColor: `hsl(${hue}, 50%, ${brightness * 60 + 20}%)` }}
+            onLoad={(e) => e.currentTarget.classList.add('loaded')}
           />
         )}
 

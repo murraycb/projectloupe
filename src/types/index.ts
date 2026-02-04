@@ -84,7 +84,12 @@ export interface ImageEntry {
   colorLabel: 'none' | 'red' | 'yellow' | 'green' | 'blue' | 'purple';
   burstGroupId: string | null;
   burstIndex: number | null;
-  // Thumbnail
+  // Progressive thumbnails
+  colorSwatch?: string;           // hex color from backend (e.g., "#ff8040")
+  microThumbnailUrl?: string;     // asset:// URL for 300px micro thumbnail
+  previewThumbnailUrl?: string;   // asset:// URL for 1600px preview
+  thumbnailTier?: 'swatch' | 'micro' | 'preview' | 'loupe';  // highest loaded tier
+  // Legacy thumbnail (v1) - kept for backward compatibility
   thumbnailPath?: string;    // local file path to cached thumbnail
   thumbnailUrl?: string;     // asset:// URL for rendering
   // Placeholder colors (used when no thumbnail yet)

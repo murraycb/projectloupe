@@ -29,6 +29,9 @@ let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) 
 let openDialog: ((options: Record<string, unknown>) => Promise<string | null>) | null = null;
 let convertFileSrc: ((path: string) => string) | null = null;
 
+// Debounce timer for preview loading on selection change
+let previewDebounceTimer: number | null = null;
+
 async function loadTauriApis() {
   try {
     const tauri = await import('@tauri-apps/api/core');
@@ -79,7 +82,12 @@ interface ImageStore {
   importFromJson: (url: string) => Promise<void>;
   loadSession: (folderPath: string) => Promise<boolean>;
   applyAnnotations: () => Promise<void>;
-  extractThumbnails: () => Promise<void>;
+  
+  // === Actions — progressive thumbnails ===
+  loadColorSwatches: () => Promise<void>;      // Phase 1: instant color backgrounds
+  loadMicroThumbnails: () => Promise<void>;    // Phase 2: 300px grid thumbnails  
+  loadPreviewForSelected: () => Promise<void>; // Phase 3: 1600px for selected image
+  extractThumbnails: () => Promise<void>;      // Legacy v1 action (now calls loadMicroThumbnails)
 
   // === Actions — loupe ===
   openLoupe: (imageId: string) => void;
@@ -253,6 +261,12 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       }
       return { selectedIds: newSelectedIds };
     });
+
+    // Debounced preview loading for selected images
+    if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(() => {
+      get().loadPreviewForSelected();
+    }, 200);
   },
 
   selectRange: (startId, endId) => {
@@ -265,6 +279,12 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     const newSelectedIds = new Set(selectedIds);
     for (let i = min; i <= max; i++) newSelectedIds.add(imageOrder[i]);
     set({ selectedIds: newSelectedIds });
+
+    // Debounced preview loading for selected images
+    if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(() => {
+      get().loadPreviewForSelected();
+    }, 200);
   },
 
   clearSelection: () => set({ selectedIds: new Set() }),
@@ -324,7 +344,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         importError: null,
       });
 
-      get().extractThumbnails();
+      // Progressive thumbnail loading pipeline
+      const store = get();
+      await store.loadColorSwatches();   // Phase 1: instant color backgrounds
+      await store.loadMicroThumbnails(); // Phase 2: 300px grid thumbnails
     } catch (err: any) {
       const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || 'Unknown import error');
       set({ isImporting: false, importError: errorMsg });
@@ -357,7 +380,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         importError: null,
       });
 
-      get().extractThumbnails();
+      // Progressive thumbnail loading pipeline
+      const store = get();
+      await store.loadColorSwatches();   // Phase 1: instant color backgrounds
+      await store.loadMicroThumbnails(); // Phase 2: 300px grid thumbnails
     } catch (err: any) {
       const errorMsg = typeof err === 'string' ? err : (err?.message || 'Unknown error');
       set({ isImporting: false, importError: errorMsg });
@@ -409,7 +435,11 @@ export const useImageStore = create<ImageStore>((set, get) => ({
 
       // Apply persisted annotations (flags, ratings, labels)
       await get().applyAnnotations();
-      get().extractThumbnails();
+      
+      // Progressive thumbnail loading pipeline
+      const store = get();
+      await store.loadColorSwatches();   // Phase 1: instant color backgrounds
+      await store.loadMicroThumbnails(); // Phase 2: 300px grid thumbnails
 
       console.log(`Restored session: ${hydrated.imageMap.size} images from SQLite`);
       return true;
@@ -578,33 +608,121 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     }
   },
 
-  extractThumbnails: async () => {
+  // Progressive thumbnail loading actions
+  loadColorSwatches: async () => {
     try {
       if (!invoke) await loadTauriApis();
-      if (!invoke || !convertFileSrc) return;
+      if (!invoke) return; // Gracefully degrade in browser mode
 
-      console.time('thumbnail extraction');
-      const thumbMap = await invoke('extract_thumbnails', {}) as Record<string, string>;
-      console.timeEnd('thumbnail extraction');
-      console.log(`Extracted ${Object.keys(thumbMap).length} thumbnails`);
+      const { imageMap } = get();
+      const filePaths = Array.from(imageMap.keys());
+      if (filePaths.length === 0) return;
+
+      console.time('color swatch loading');
+      const swatchMap = await invoke('get_color_swatches', { filePaths }) as Record<string, string>;
+      console.timeEnd('color swatch loading');
+      console.log(`Loaded ${Object.keys(swatchMap).length} color swatches`);
 
       set((state) => {
         const newMap = new Map(state.imageMap);
-        for (const [filePath, thumbPath] of Object.entries(thumbMap)) {
+        for (const [filePath, colorHex] of Object.entries(swatchMap)) {
           const img = newMap.get(filePath);
-          if (img && convertFileSrc) {
+          if (img) {
             newMap.set(filePath, {
               ...img,
-              thumbnailPath: thumbPath,
-              thumbnailUrl: convertFileSrc(thumbPath),
+              colorSwatch: colorHex,
+              thumbnailTier: 'swatch',
             });
           }
         }
         return { imageMap: newMap };
       });
     } catch (err) {
-      console.error('Thumbnail extraction failed:', err);
+      console.error('Color swatch loading failed:', err);
     }
+  },
+
+  loadMicroThumbnails: async () => {
+    try {
+      if (!invoke) await loadTauriApis();
+      if (!invoke || !convertFileSrc) return; // Gracefully degrade in browser mode
+
+      const { imageMap } = get();
+      const filePaths = Array.from(imageMap.keys());
+      if (filePaths.length === 0) return;
+
+      console.time('micro thumbnail loading');
+      const thumbMap = await invoke('get_thumbnails_batch_v2', { 
+        filePaths, 
+        tier: 'micro' 
+      }) as Record<string, string>;
+      console.timeEnd('micro thumbnail loading');
+      console.log(`Loaded ${Object.keys(thumbMap).length} micro thumbnails`);
+
+      set((state) => {
+        const newMap = new Map(state.imageMap);
+        for (const [filePath, cachePath] of Object.entries(thumbMap)) {
+          const img = newMap.get(filePath);
+          if (img && convertFileSrc) {
+            const assetUrl = convertFileSrc(cachePath);
+            newMap.set(filePath, {
+              ...img,
+              microThumbnailUrl: assetUrl,
+              thumbnailUrl: assetUrl, // Backward compatibility
+              thumbnailPath: cachePath, // Backward compatibility
+              thumbnailTier: 'micro',
+            });
+          }
+        }
+        return { imageMap: newMap };
+      });
+    } catch (err) {
+      console.error('Micro thumbnail loading failed:', err);
+    }
+  },
+
+  loadPreviewForSelected: async () => {
+    try {
+      if (!invoke) await loadTauriApis();
+      if (!invoke || !convertFileSrc) return; // Gracefully degrade in browser mode
+
+      const { selectedIds, imageMap } = get();
+      const selectedPaths = Array.from(selectedIds)
+        .map(id => imageMap.get(id)?.path)
+        .filter(Boolean) as string[];
+      
+      if (selectedPaths.length === 0) return;
+
+      console.time('preview thumbnail loading');
+      const previewMap = await invoke('get_thumbnails_batch_v2', {
+        filePaths: selectedPaths,
+        tier: 'preview'
+      }) as Record<string, string>;
+      console.timeEnd('preview thumbnail loading');
+      console.log(`Loaded ${Object.keys(previewMap).length} preview thumbnails`);
+
+      set((state) => {
+        const newMap = new Map(state.imageMap);
+        for (const [filePath, cachePath] of Object.entries(previewMap)) {
+          const img = newMap.get(filePath);
+          if (img && convertFileSrc) {
+            newMap.set(filePath, {
+              ...img,
+              previewThumbnailUrl: convertFileSrc(cachePath),
+              thumbnailTier: 'preview',
+            });
+          }
+        }
+        return { imageMap: newMap };
+      });
+    } catch (err) {
+      console.error('Preview thumbnail loading failed:', err);
+    }
+  },
+
+  extractThumbnails: async () => {
+    // Legacy v1 action - now calls loadMicroThumbnails for backward compatibility
+    await get().loadMicroThumbnails();
   },
 
   cycleOverlayMode: () => {
