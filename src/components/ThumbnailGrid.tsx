@@ -125,16 +125,30 @@ function ThumbnailGrid() {
     }
   }
 
-  // Row height: image (1:1 square) + overlay text + card chrome + burst stack offset + row gap
-  // Components: card border(4), burst stack shadow(14), selection outline(6), row gap(8)
-  // Overlay text: burst cards show 2 lines (filename + burst info) in minimal,
-  //   standard adds exposure, full adds ISO/focal. Singles may show less.
-  const imageHeight = thumbnailSize;
-  const overlayHeight = overlayMode === 'none' ? 8
-    : overlayMode === 'minimal' ? 48
-    : overlayMode === 'standard' ? 64
-    : 80; // full — 3-4 lines of text
-  const ITEM_HEIGHT = imageHeight + overlayHeight + 40; // 40 = generous chrome + stack + gap + outline
+  // Row height: computed exactly from thumbnailSize + overlay + card chrome.
+  // No magic padding — cell height is deterministic for current overlay mode.
+  //
+  // Single card (ThumbnailCard):
+  //   border: 2px × 2 = 4px
+  //   image: thumbnailSize (1:1 square)
+  //   overlay: per J mode (thumb-info padding 8px + line heights)
+  //
+  // Burst card (BurstGroup collapsed):
+  //   stack-3 extends 6px below image-placeholder
+  //   image: thumbnailSize (1:1 square)
+  //   burst info: always 2 lines = 34px (padding 8 + filename 14 + burst-info 12)
+  //
+  // Overlay heights (from CSS: padding 4+4, filename 14px, exif lines 12px, gap 1px):
+  //   none: 0, minimal: 22, standard: 35, full: 48
+  const OVERLAY_HEIGHT: Record<string, number> = { none: 0, minimal: 22, standard: 35, full: 48 };
+  const BURST_INFO_HEIGHT = 34; // always-visible filename + burst info
+  const CARD_BORDER = 4;        // 2px border × 2 (ThumbnailCard)
+  const BURST_STACK_BELOW = 6;  // stack-3 extends 6px below image-placeholder
+  const ROW_GAP = 8;            // var(--pl-space-sm) padding-bottom on .grid-row
+
+  const singleCardHeight = thumbnailSize + CARD_BORDER + (OVERLAY_HEIGHT[overlayMode] ?? 0);
+  const burstCardHeight = thumbnailSize + BURST_STACK_BELOW + BURST_INFO_HEIGHT;
+  const ITEM_HEIGHT = Math.max(singleCardHeight, burstCardHeight) + ROW_GAP;
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
