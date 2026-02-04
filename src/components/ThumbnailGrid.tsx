@@ -10,7 +10,7 @@ import './ThumbnailGrid.css';
 type DisplayItem =
   | { type: 'image'; id: string; data: ImageEntry }
   | { type: 'burst'; id: string; burstId: string }
-  | { type: 'burst-frame'; id: string; data: ImageEntry; burstId: string }
+  | { type: 'burst-frame'; id: string; data: ImageEntry; burstId: string; frameIndex: number; frameCount: number }
   | { type: 'camera-header'; id: string; data: { serial: string; label: string; count: number } };
 
 function ThumbnailGrid() {
@@ -105,19 +105,22 @@ function ThumbnailGrid() {
       if (img.burstGroupId && !processedBursts.has(img.burstGroupId)) {
         const burst = normalizedBurstGroups.find((b) => b.id === img.burstGroupId);
         if (burst) {
-          items.push({
-            type: 'burst',
-            id: burst.id,
-            burstId: burst.id,
-          });
-          // If burst is expanded, add individual frames after the stack
           if (expandedBursts.has(burst.id)) {
-            for (const frameId of burst.imageIds) {
-              const frameImg = imageMap.get(frameId);
+            // Expanded: show individual frames only (no stack card)
+            const frameCount = burst.imageIds.length;
+            for (let i = 0; i < burst.imageIds.length; i++) {
+              const frameImg = imageMap.get(burst.imageIds[i]);
               if (frameImg) {
-                items.push({ type: 'burst-frame', data: frameImg, id: frameImg.id, burstId: burst.id });
+                items.push({ type: 'burst-frame', data: frameImg, id: frameImg.id, burstId: burst.id, frameIndex: i + 1, frameCount });
               }
             }
+          } else {
+            // Collapsed: show stack card
+            items.push({
+              type: 'burst',
+              id: burst.id,
+              burstId: burst.id,
+            });
           }
         }
         processedBursts.add(img.burstGroupId);
@@ -304,7 +307,12 @@ function ThumbnailGrid() {
                       ) : item.type === 'burst' ? (
                         <BurstGroup burstId={item.burstId} />
                       ) : item.type === 'burst-frame' ? (
-                        <ThumbnailCard image={item.data} />
+                        <ThumbnailCard
+                          image={item.data}
+                          burstId={item.burstId}
+                          frameIndex={item.frameIndex}
+                          frameCount={item.frameCount}
+                        />
                       ) : null}
                     </div>
                   ))}

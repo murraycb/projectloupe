@@ -44,6 +44,7 @@ function App() {
     clearSelection,
     cycleOverlayMode,
     thumbnailSize,
+    expandedBursts,
     loupe,
     openLoupe,
   } = useImageStore();
@@ -93,12 +94,19 @@ function App() {
           processedBursts.add(burstId);
           const burst = normalizedBurstGroups.find((b) => b.id === burstId);
           if (burst && burst.imageIds.length > 0) {
-            // Use cover image (first pick > first unflagged > first) — matches BurstGroup display
-            const burstImages = burst.imageIds.map((bid) => imageMap.get(bid)!).filter(Boolean);
-            const cover = burstImages.find((i) => i.flag === 'pick')
-              || burstImages.find((i) => i.flag === 'none')
-              || burstImages[0];
-            list.push(cover ? cover.id : burst.imageIds[0]);
+            if (expandedBursts.has(burstId)) {
+              // Expanded: all frames are individually navigable
+              for (const frameId of burst.imageIds) {
+                list.push(frameId);
+              }
+            } else {
+              // Collapsed: use cover image (first pick > first unflagged > first)
+              const burstImages = burst.imageIds.map((bid) => imageMap.get(bid)!).filter(Boolean);
+              const cover = burstImages.find((i) => i.flag === 'pick')
+                || burstImages.find((i) => i.flag === 'none')
+                || burstImages[0];
+              list.push(cover ? cover.id : burst.imageIds[0]);
+            }
           }
         }
       } else {
@@ -133,7 +141,7 @@ function App() {
     }
 
     return { navItems: items, navRows: rows };
-  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode, thumbnailSize]);
+  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode, thumbnailSize, expandedBursts]);
 
   // Theme
   useEffect(() => {
@@ -248,6 +256,13 @@ function App() {
         }
 
         useImageStore.setState({ selectedIds: new Set([nextId]) });
+        // Scroll selected card into view (after React + virtualizer render)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const card = document.querySelector('.thumb-card.selected, .burst-group.selected');
+            card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          });
+        });
         return;
       }
 
@@ -322,6 +337,19 @@ function App() {
       };
 
       switch (e.key.toLowerCase()) {
+        case 'e': {
+          // Toggle burst expand/collapse for selected image(s)
+          e.preventDefault();
+          const toggled = new Set<string>();
+          for (const id of selectedArray) {
+            const bId = burstIndex.get(id);
+            if (bId && !toggled.has(bId)) {
+              toggled.add(bId);
+              useImageStore.getState().toggleBurstExpanded(bId);
+            }
+          }
+          break;
+        }
         case 'p':
           e.preventDefault();
           applyFlag('pick');

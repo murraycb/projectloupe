@@ -786,10 +786,16 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   toggleBurstExpanded: (burstId) => {
     set((state) => {
       const next = new Set(state.expandedBursts);
-      if (next.has(burstId)) {
-        next.delete(burstId);
-      } else {
+      const expanding = !next.has(burstId);
+      if (expanding) {
         next.add(burstId);
+        // Select the cover image so cursor moves to the first frame
+        const burst = state.normalizedBurstGroups.find((b) => b.id === burstId);
+        if (burst && burst.imageIds.length > 0) {
+          return { expandedBursts: next, selectedIds: new Set([burst.imageIds[0]]) };
+        }
+      } else {
+        next.delete(burstId);
       }
       return { expandedBursts: next };
     });
@@ -806,3 +812,5 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     });
   },
 }));
+
+// Dev helper is in main.tsx — single source of truth for window.__loupe

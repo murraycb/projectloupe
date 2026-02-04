@@ -4,10 +4,16 @@ import './ThumbnailCard.css';
 
 interface ThumbnailCardProps {
   image: ImageEntry;
+  /** When rendered as part of an expanded burst */
+  burstId?: string;
+  /** 1-based position within the burst */
+  frameIndex?: number;
+  /** Total frames in the burst */
+  frameCount?: number;
 }
 
-function ThumbnailCard({ image }: ThumbnailCardProps) {
-  const { selectedIds, toggleSelection, overlayMode, openLoupe } = useImageStore();
+function ThumbnailCard({ image, burstId, frameIndex, frameCount }: ThumbnailCardProps) {
+  const { selectedIds, toggleSelection, overlayMode, openLoupe, toggleBurstExpanded } = useImageStore();
   const isSelected = selectedIds.has(image.id);
 
   // Placeholder hue/brightness kept for potential future use but not used for swatch
@@ -27,9 +33,11 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
   // Progressive thumbnail priority: preview > micro > legacy > none
   const displayUrl = image.previewThumbnailUrl || image.microThumbnailUrl || image.thumbnailUrl;
 
+  const isBurstFrame = !!burstId;
+
   return (
     <div
-      className={`thumb-card ${isSelected ? 'selected' : ''} ${image.flag !== 'none' ? image.flag : ''}`}
+      className={`thumb-card ${isSelected ? 'selected' : ''} ${image.flag !== 'none' ? image.flag : ''} ${isBurstFrame ? 'burst-frame' : ''}`}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
@@ -63,6 +71,17 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
           <div className="thumb-stars">
             {'★'.repeat(image.rating)}
           </div>
+        )}
+
+        {/* Frame position badge — click to collapse burst */}
+        {isBurstFrame && frameIndex != null && frameCount != null && (
+          <button
+            className="burst-frame-badge interactive"
+            onClick={(e) => { e.stopPropagation(); toggleBurstExpanded(burstId); }}
+            title="Collapse burst"
+          >
+            {frameIndex}/{frameCount}
+          </button>
         )}
 
         {/* Color label strip */}

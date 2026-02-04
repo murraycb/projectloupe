@@ -7,7 +7,8 @@ import { useImageStore } from './stores/imageStore';
 // Expose store on window for dev testing (browser console / automation)
 if (import.meta.env.DEV) {
   (window as any).__loupe = {
-    store: () => useImageStore.getState(),
+    getState: () => useImageStore.getState(),
+    setState: (patch: any) => useImageStore.setState(patch),
     importPath: (path: string) => useImageStore.getState().importPath(path),
     importFolder: () => useImageStore.getState().importFolder(),
     importJson: (url?: string) => useImageStore.getState().importFromJson(url || '/import-payload.json'),

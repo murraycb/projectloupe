@@ -65,17 +65,12 @@ function BurstGroup({ burstId }: BurstGroupProps) {
             )}
             {allRejected && <div className="burst-flag-reject" />}
             {!allRejected && hasPicks && <div className="burst-flag-pick" />}
-            <div className="burst-count-badge">
-              <span>{burst.frameCount}</span>
-            </div>
             <button
-              className={`burst-expand-btn ${isExpanded ? 'expanded' : ''}`}
+              className="burst-count-badge interactive"
               onClick={(e) => { e.stopPropagation(); toggleBurstExpanded(burstId); }}
               title={isExpanded ? 'Collapse burst' : 'Expand burst'}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d={isExpanded ? 'M7 14l5-5 5 5z' : 'M7 10l5 5 5-5z'} />
-              </svg>
+              <span>{burst.frameCount}</span>
             </button>
           </div>
         </div>
