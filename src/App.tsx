@@ -45,6 +45,7 @@ function App() {
     cycleOverlayMode,
     thumbnailSize,
     expandedBursts,
+    flattenBursts,
     loupe,
     openLoupe,
   } = useImageStore();
@@ -94,7 +95,7 @@ function App() {
           processedBursts.add(burstId);
           const burst = normalizedBurstGroups.find((b) => b.id === burstId);
           if (burst && burst.imageIds.length > 0) {
-            if (expandedBursts.has(burstId)) {
+            if (flattenBursts || expandedBursts.has(burstId)) {
               // Expanded: all frames are individually navigable
               for (const frameId of burst.imageIds) {
                 list.push(frameId);
@@ -141,7 +142,7 @@ function App() {
     }
 
     return { navItems: items, navRows: rows };
-  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode, thumbnailSize, expandedBursts]);
+  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode, thumbnailSize, expandedBursts, flattenBursts]);
 
   // Theme
   useEffect(() => {
@@ -218,7 +219,7 @@ function App() {
         e.preventDefault();
         const currentId = selectedArray.length === 1 ? selectedArray[0] : null;
         let currentIdx = currentId ? navItems.indexOf(currentId) : -1;
-        if (currentIdx === -1 && currentId && !isReviewMode) {
+        if (currentIdx === -1 && currentId && !isReviewMode && !flattenBursts) {
           // Default mode: if selected image is inside a burst, find the burst's cover
           const bId = burstIndex.get(currentId);
           if (bId) {
@@ -279,7 +280,7 @@ function App() {
       // operations, or null for individual behavior.
       // Individual when: review mode OR burst is expanded (per spec)
       const getBurstIds = (id: string): string[] | null => {
-        if (isReviewMode) return null;
+        if (isReviewMode || flattenBursts) return null;
         const bId = burstIndex.get(id);
         if (!bId) return null;
         if (expandedBursts.has(bId)) return null; // Expanded = frame-level
@@ -403,7 +404,7 @@ function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups, isReviewMode, filters]);
+  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups, isReviewMode, flattenBursts, filters]);
 
   return (
     <div className="app">
