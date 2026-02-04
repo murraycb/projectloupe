@@ -10,8 +10,9 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
   const { selectedIds, toggleSelection, overlayMode, openLoupe } = useImageStore();
   const isSelected = selectedIds.has(image.id);
 
-  const hue = image._placeholderHue || 0;
-  const brightness = image._placeholderBrightness || 0.5;
+  // Placeholder hue/brightness kept for potential future use but not used for swatch
+  const _hue = image._placeholderHue || 0;
+  const _brightness = image._placeholderBrightness || 0.5;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -25,7 +26,6 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
 
   // Progressive thumbnail priority: preview > micro > legacy > none
   const displayUrl = image.previewThumbnailUrl || image.microThumbnailUrl || image.thumbnailUrl;
-  const swatchColor = image.colorSwatch || `hsl(${hue}, 50%, ${brightness * 60 + 20}%)`;
 
   return (
     <div
@@ -34,11 +34,8 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
       onDoubleClick={handleDoubleClick}
     >
       <div className="thumb-image">
-        {/* Always-visible color swatch background */}
-        <div 
-          className="thumb-swatch" 
-          style={{ backgroundColor: swatchColor }} 
-        />
+        {/* Neutral letterbox/pillarbox background */}
+        <div className="thumb-swatch" />
         
         {/* Thumbnail overlaid with crossfade */}
         {displayUrl && (

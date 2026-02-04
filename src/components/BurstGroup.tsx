@@ -46,7 +46,7 @@ function BurstGroup({ burstId }: BurstGroupProps) {
           <div className="stack-layer stack-3"></div>
           <div className="stack-layer stack-2"></div>
           <div className="image-placeholder">
-            <div className="burst-swatch" style={{ backgroundColor: coverImage.colorSwatch || `hsl(${hue}, 60%, ${brightness * 100}%)` }} />
+            <div className="burst-swatch" />
             {coverImage.thumbnailUrl && (
               <img
                 className="burst-cover-img"
