@@ -45,6 +45,11 @@ function ThumbnailGrid() {
     });
   }, [imageMap, imageOrder, filters]);
 
+  // Review mode: any filter active → flatten bursts to individual images
+  const isReviewMode = useMemo(() => {
+    return filters.minRating > 0 || filters.flags.size > 0 || filters.colorLabels.size > 0;
+  }, [filters]);
+
   // Build display items: camera sections with bursts and singles
   const displayItems = useMemo(() => {
     const items: DisplayItem[] = [];
@@ -77,7 +82,7 @@ function ThumbnailGrid() {
     }
 
     return items;
-  }, [filteredIds, cameras, normalizedBurstGroups, imageMap]);
+  }, [filteredIds, cameras, normalizedBurstGroups, imageMap, isReviewMode]);
 
   function addImagesAsItems(
     imageIds: string[],
@@ -86,6 +91,13 @@ function ThumbnailGrid() {
   ) {
     for (const id of imageIds) {
       const img = imageMap.get(id)!;
+
+      // Review mode: always show individual images (no burst grouping)
+      if (isReviewMode) {
+        items.push({ type: 'image', data: img, id: img.id });
+        continue;
+      }
+
       if (img.burstGroupId && !processedBursts.has(img.burstGroupId)) {
         const burst = normalizedBurstGroups.find((b) => b.id === img.burstGroupId);
         if (burst) {

@@ -208,6 +208,35 @@ function updateInMap(
   return newMap;
 }
 
+/**
+ * Get navigable image IDs for loupe, respecting burst scope and active filters.
+ * - If burst-scoped: navigate within burst frames
+ * - Otherwise: navigate through filtered image list
+ */
+function getLoupeNavigableIds(
+  loupe: LoupeState,
+  imageMap: Map<string, ImageEntry>,
+  imageOrder: string[],
+  normalizedBurstGroups: NormalizedBurstGroup[],
+  filters: FilterState,
+): string[] {
+  if (loupe.burstId) {
+    const burst = normalizedBurstGroups.find((b) => b.id === loupe.burstId);
+    return burst ? burst.imageIds : [];
+  }
+
+  return imageOrder.filter((id) => {
+    const img = imageMap.get(id);
+    if (!img) return false;
+    if (img.rating < filters.minRating) return false;
+    if (filters.flags.size > 0 && !filters.flags.has(img.flag)) return false;
+    if (filters.colorLabels.size > 0 && !filters.colorLabels.has(img.colorLabel)) return false;
+    if (filters.showBurstsOnly && !img.burstGroupId) return false;
+    if (filters.cameraSerial && img.serialNumber !== filters.cameraSerial) return false;
+    return true;
+  });
+}
+
 export const useImageStore = create<ImageStore>((set, get) => ({
   // Normalized data
   imageMap: new Map(),
@@ -483,11 +512,14 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   openLoupe: (imageId: string) => {
-    const { imageMap, normalizedBurstGroups, burstIndex } = get();
+    const { imageMap, imageOrder, normalizedBurstGroups, burstIndex, filters } = get();
     const image = imageMap.get(imageId);
     if (!image) return;
 
-    const burstId = burstIndex.get(imageId) || null;
+    // Detect review mode: any content filter active → no burst scoping
+    const isReviewMode = filters.minRating > 0 || filters.flags.size > 0 || filters.colorLabels.size > 0;
+
+    const burstId = (!isReviewMode && burstIndex.get(imageId)) || null;
 
     // Smart start frame: first pick > first unflagged > first frame
     let startId = imageId;
@@ -565,17 +597,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   loupeNext: () => {
-    const { loupe, imageOrder, normalizedBurstGroups } = get();
+    const { loupe, imageMap, imageOrder, normalizedBurstGroups, filters } = get();
     if (!loupe.active || !loupe.imageId) return;
 
-    let navigableIds: string[];
-    if (loupe.burstId) {
-      const burst = normalizedBurstGroups.find((b) => b.id === loupe.burstId);
-      navigableIds = burst ? burst.imageIds : [];
-    } else {
-      navigableIds = imageOrder;
-    }
-
+    const navigableIds = getLoupeNavigableIds(loupe, imageMap, imageOrder, normalizedBurstGroups, filters);
     const currentIdx = navigableIds.indexOf(loupe.imageId);
     if (currentIdx < navigableIds.length - 1) {
       const nextId = navigableIds[currentIdx + 1];
@@ -587,17 +612,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   loupePrev: () => {
-    const { loupe, imageOrder, normalizedBurstGroups } = get();
+    const { loupe, imageMap, imageOrder, normalizedBurstGroups, filters } = get();
     if (!loupe.active || !loupe.imageId) return;
 
-    let navigableIds: string[];
-    if (loupe.burstId) {
-      const burst = normalizedBurstGroups.find((b) => b.id === loupe.burstId);
-      navigableIds = burst ? burst.imageIds : [];
-    } else {
-      navigableIds = imageOrder;
-    }
-
+    const navigableIds = getLoupeNavigableIds(loupe, imageMap, imageOrder, normalizedBurstGroups, filters);
     const currentIdx = navigableIds.indexOf(loupe.imageId);
     if (currentIdx > 0) {
       const prevId = navigableIds[currentIdx - 1];

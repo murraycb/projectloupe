@@ -15,6 +15,7 @@ function LoupeView() {
     imageMap,
     imageOrder,
     normalizedBurstGroups,
+    filters,
     closeLoupe,
     loupeNext,
     loupePrev,
@@ -28,16 +29,30 @@ function LoupeView() {
     [imageMap, loupe.imageId]
   );
 
-  // Get the navigable image list (burst frames or all images)
+  // Get the navigable image list, respecting filters and burst scope
   const navigableImages = useMemo(() => {
+    // If scoped to a burst, navigate within burst frames
     if (loupe.burstId) {
       const burst = normalizedBurstGroups.find((b) => b.id === loupe.burstId);
       return burst
         ? burst.imageIds.map((id) => imageMap.get(id)!).filter(Boolean)
         : [];
     }
-    return imageOrder.map((id) => imageMap.get(id)!).filter(Boolean);
-  }, [loupe.burstId, normalizedBurstGroups, imageMap, imageOrder]);
+
+    // Otherwise, navigate through filtered images only
+    const filterImage = (img: ImageEntry) => {
+      if (img.rating < filters.minRating) return false;
+      if (filters.flags.size > 0 && !filters.flags.has(img.flag)) return false;
+      if (filters.colorLabels.size > 0 && !filters.colorLabels.has(img.colorLabel)) return false;
+      if (filters.showBurstsOnly && !img.burstGroupId) return false;
+      if (filters.cameraSerial && img.serialNumber !== filters.cameraSerial) return false;
+      return true;
+    };
+
+    return imageOrder
+      .map((id) => imageMap.get(id)!)
+      .filter((img) => img && filterImage(img));
+  }, [loupe.burstId, normalizedBurstGroups, imageMap, imageOrder, filters]);
 
   const currentIndex = useMemo(
     () => navigableImages.findIndex((img) => img.id === loupe.imageId),
