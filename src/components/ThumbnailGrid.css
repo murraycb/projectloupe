@@ -3,7 +3,7 @@
   height: 100%;
   overflow-y: scroll;  /* always show scrollbar track */
   overflow-x: hidden;
-  /* padding set via inline style from gridGap */
+  padding: var(--pl-space-sm);
 }
 
 /* Scrollbar — always visible */
@@ -61,6 +61,7 @@
   gap: var(--pl-space-sm);
   padding: var(--pl-space-xs) 0;
   border-bottom: 1px solid var(--pl-border);
+  margin-bottom: var(--pl-space-xs);
 }
 
 .camera-label {
