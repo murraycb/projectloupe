@@ -8,7 +8,7 @@ interface StatusBarProps {
 }
 
 function StatusBar({ theme, onToggleTheme }: StatusBarProps) {
-  const { imageMap, normalizedBurstGroups, selectedIds, filters, overlayMode, thumbnailSize, setThumbnailSize } = useImageStore();
+  const { imageMap, normalizedBurstGroups, selectedIds, filters, overlayMode, thumbnailSize, setThumbnailSize, gridGap, setGridGap } = useImageStore();
 
   const stats = useMemo(() => {
     const total = imageMap.size;
@@ -88,6 +88,28 @@ function StatusBar({ theme, onToggleTheme }: StatusBarProps) {
           />
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
             <rect x="2" y="2" width="20" height="20" rx="2" />
+          </svg>
+        </div>
+        <div className="density-slider" title="Grid density">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
+            <rect x="2" y="3" width="9" height="8" rx="1" />
+            <rect x="13" y="3" width="9" height="8" rx="1" />
+            <rect x="2" y="13" width="9" height="8" rx="1" />
+            <rect x="13" y="13" width="9" height="8" rx="1" />
+          </svg>
+          <input
+            type="range"
+            min="0"
+            max="24"
+            value={gridGap}
+            onChange={(e) => setGridGap(parseInt(e.target.value))}
+            className="size-slider"
+          />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
+            <rect x="1" y="2" width="9" height="8" rx="1" />
+            <rect x="14" y="2" width="9" height="8" rx="1" />
+            <rect x="1" y="14" width="9" height="8" rx="1" />
+            <rect x="14" y="14" width="9" height="8" rx="1" />
           </svg>
         </div>
         <button className="status-theme-btn" onClick={onToggleTheme} title="Toggle theme (⌘⇧T)">

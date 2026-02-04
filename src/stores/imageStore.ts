@@ -98,6 +98,8 @@ interface ImageStore {
   // === Actions — display ===
   thumbnailSize: number;                   // grid thumbnail width in px (100–400)
   setThumbnailSize: (size: number) => void;
+  gridGap: number;                         // spacing between grid cells/rows in px (0–24)
+  setGridGap: (gap: number) => void;
   expandedBursts: Set<string>;             // burst IDs currently expanded in grid
   toggleBurstExpanded: (burstId: string) => void;
   collapseAllBursts: () => void;
@@ -258,6 +260,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   folderPath: null,
   loupe: { active: false, imageId: null, burstId: null, loupeUrls: {} },
   thumbnailSize: 200,
+  gridGap: 8,
   expandedBursts: new Set<string>(),
   filters: {
     minRating: 0,
@@ -774,6 +777,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
 
   setThumbnailSize: (size) => {
     set({ thumbnailSize: Math.max(100, Math.min(400, size)) });
+  },
+
+  setGridGap: (gap) => {
+    set({ gridGap: Math.max(0, Math.min(24, gap)) });
   },
 
   toggleBurstExpanded: (burstId) => {

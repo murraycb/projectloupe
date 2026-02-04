@@ -16,10 +16,10 @@ type DisplayItem =
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, expandedBursts } = useImageStore();
+  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, gridGap, expandedBursts } = useImageStore();
 
-  // Responsive column count — derived from thumbnailSize
-  const cellWidth = thumbnailSize + 16; // thumbnail + gap/padding
+  // Responsive column count — derived from thumbnailSize + gridGap
+  const cellWidth = thumbnailSize + gridGap * 2; // thumbnail + gap on each side
   useEffect(() => {
     const updateColumns = () => {
       if (parentRef.current) {
@@ -148,8 +148,7 @@ function ThumbnailGrid() {
     return () => observer.disconnect();
   }, [thumbnailSize, measureCells]);
 
-  const ROW_GAP = 8; // var(--pl-space-sm) padding-bottom on .grid-row
-  const ITEM_HEIGHT = measuredCellHeight + ROW_GAP;
+  const ITEM_HEIGHT = measuredCellHeight + gridGap;
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
@@ -185,7 +184,7 @@ function ThumbnailGrid() {
   });
 
   // Force virtualizer to recalculate row positions when heights change
-  // (overlay mode toggle, thumbnail size slider). Without this, TanStack
+  // (thumbnail size slider, density slider). Without this, TanStack
   // Virtual caches stale estimateSize results and rows overlap.
   useEffect(() => {
     virtualizer.measure();
@@ -285,7 +284,7 @@ function ThumbnailGrid() {
                   </span>
                 </div>
               ) : (
-                <div className="grid-row">
+                <div className="grid-row" style={{ gap: gridGap, paddingBottom: gridGap }}>
                   {row.items.map((item) => (
                     <div key={item.id} className="grid-cell" style={{ width: thumbnailSize }}>
                       {item.type === 'image' ? (

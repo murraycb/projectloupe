@@ -32,11 +32,16 @@
 .status-item.reject { color: var(--pl-reject); }
 
 /* Thumbnail size slider */
-.thumbnail-slider {
+.thumbnail-slider,
+.density-slider {
   display: flex;
   align-items: center;
   gap: 4px;
   color: var(--pl-text-tertiary);
+}
+
+.density-slider .size-slider {
+  width: 48px;
 }
 
 .size-slider {

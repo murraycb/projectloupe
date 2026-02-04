@@ -27,8 +27,7 @@
 
 .grid-row {
   display: flex;
-  gap: var(--pl-space-sm);
-  padding-bottom: var(--pl-space-sm);
+  /* gap and padding-bottom set via inline style from gridGap */
 }
 
 .grid-cell {
