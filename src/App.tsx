@@ -34,21 +34,44 @@ function App() {
     openLoupe,
   } = useImageStore();
 
-  // Build navigable item list — bursts as single nav items.
-  // Only depends on imageOrder + burstIndex (not on flag state),
-  // so this doesn't recompute when flags change.
+  const filters = useImageStore((s) => s.filters);
+
+  // Review mode: any content filter active → flatten bursts, individual behavior
+  const isReviewMode = useMemo(() => {
+    return filters.minRating > 0 || filters.flags.size > 0 || filters.colorLabels.size > 0;
+  }, [filters]);
+
+  // Build navigable item list — respects review mode (flattened) vs default (burst-grouped).
   const { navItems, navRows } = useMemo(() => {
     const items: string[] = [];
     const rows: string[][] = [];
     const byCamera = new Map<string, string[]>();
     const processedBursts = new Set<string>();
 
-    for (const id of imageOrder) {
+    // Build filtered ID list
+    const filteredIds = imageOrder.filter((id) => {
+      const img = imageMap.get(id);
+      if (!img) return false;
+      if (img.rating < filters.minRating) return false;
+      if (filters.flags.size > 0 && !filters.flags.has(img.flag)) return false;
+      if (filters.colorLabels.size > 0 && !filters.colorLabels.has(img.colorLabel)) return false;
+      if (filters.showBurstsOnly && !img.burstGroupId) return false;
+      if (filters.cameraSerial && img.serialNumber !== filters.cameraSerial) return false;
+      return true;
+    });
+
+    for (const id of filteredIds) {
       const img = imageMap.get(id);
       if (!img) continue;
       const serial = img.serialNumber;
       if (!byCamera.has(serial)) byCamera.set(serial, []);
       const list = byCamera.get(serial)!;
+
+      // Review mode: every image is individual
+      if (isReviewMode) {
+        list.push(id);
+        continue;
+      }
 
       const burstId = burstIndex.get(id);
       if (burstId) {
@@ -84,7 +107,7 @@ function App() {
     }
 
     return { navItems: items, navRows: rows };
-  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras]);
+  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode]);
 
   // Theme
   useEffect(() => {
@@ -211,8 +234,9 @@ function App() {
 
       if (selectedArray.length === 0) return;
 
-      // Burst-aware flagging helper
+      // Burst-aware flagging helper — in review mode, only affect individual image
       const getBurstIds = (id: string): string[] | null => {
+        if (isReviewMode) return null; // Review mode: individual behavior
         const bId = burstIndex.get(id);
         if (!bId) return null;
         const burst = normalizedBurstGroups.find((b) => b.id === bId);
@@ -277,7 +301,7 @@ function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups]);
+  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups, isReviewMode]);
 
   return (
     <div className="app">
