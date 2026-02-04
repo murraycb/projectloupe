@@ -133,13 +133,17 @@ function ThumbnailGrid() {
   // This self-heals when CSS changes, new widgets are added, fonts load, etc.
   const singleMeasureRef = useRef<HTMLDivElement>(null);
   const burstMeasureRef = useRef<HTMLDivElement>(null);
+  const headerMeasureRef = useRef<HTMLDivElement>(null);
   const [measuredCellHeight, setMeasuredCellHeight] = useState(thumbnailSize + 62); // fallback before first measure
+  const [measuredHeaderHeight, setMeasuredHeaderHeight] = useState(35); // fallback
 
   const measureCells = useCallback(() => {
     const sH = singleMeasureRef.current?.getBoundingClientRect().height ?? 0;
     const bH = burstMeasureRef.current?.getBoundingClientRect().height ?? 0;
+    const hH = headerMeasureRef.current?.getBoundingClientRect().height ?? 0;
     const maxH = Math.max(sH, bH);
     if (maxH > 0) setMeasuredCellHeight(maxH);
+    if (hH > 0) setMeasuredHeaderHeight(hH);
   }, []);
 
   useEffect(() => {
@@ -147,11 +151,12 @@ function ThumbnailGrid() {
     const observer = new ResizeObserver(measureCells);
     if (singleMeasureRef.current) observer.observe(singleMeasureRef.current);
     if (burstMeasureRef.current) observer.observe(burstMeasureRef.current);
+    if (headerMeasureRef.current) observer.observe(headerMeasureRef.current);
     return () => observer.disconnect();
   }, [thumbnailSize, measureCells]);
 
   const ITEM_HEIGHT = measuredCellHeight + gridGap;
-  const HEADER_HEIGHT = 48;
+  const HEADER_HEIGHT = measuredHeaderHeight + gridGap; // gap below header matches grid spacing
 
   const rows = useMemo(() => {
     const result: { items: DisplayItem[]; height: number }[] = [];
@@ -248,6 +253,11 @@ function ThumbnailGrid() {
               <div className="burst-info">M</div>
             </div>
           </div>
+        </div>
+        {/* Camera header */}
+        <div ref={headerMeasureRef} className="camera-header">
+          <span className="camera-label">MEASURE</span>
+          <span className="camera-count">0 images</span>
         </div>
       </div>
 

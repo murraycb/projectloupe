@@ -61,7 +61,6 @@
   gap: var(--pl-space-sm);
   padding: var(--pl-space-xs) 0;
   border-bottom: 1px solid var(--pl-border);
-  margin-bottom: var(--pl-space-xs);
 }
 
 .camera-label {
