@@ -193,6 +193,13 @@ function ThumbnailGrid() {
     overscan: 3,
   });
 
+  // Force virtualizer to recalculate row positions when heights change
+  // (overlay mode toggle, thumbnail size slider). Without this, TanStack
+  // Virtual caches stale estimateSize results and rows overlap.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [ITEM_HEIGHT, virtualizer]);
+
   // Empty state
   if (imageMap.size === 0) {
     return (
