@@ -236,6 +236,10 @@ function LoupeView() {
           </div>
         )}
 
+        {currentImage.colorLabel !== 'none' && (
+          <div className={`loupe-color-label ${currentImage.colorLabel}`} />
+        )}
+
         {displayUrl ? (
           <img
             className={`loupe-image ${!loupeUrl ? 'loupe-image-loading' : ''}`}

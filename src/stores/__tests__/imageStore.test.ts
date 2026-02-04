@@ -222,6 +222,18 @@ describe('setColorLabel', () => {
     getStore().setColorLabel('img-1', 'none');
     expect(getStore().imageMap.get('img-1')?.colorLabel).toBe('none');
   });
+
+  it('toggles same label off (red → none)', () => {
+    seedStore({ images: [makeImage({ id: 'img-1', colorLabel: 'red' })] });
+    getStore().setColorLabel('img-1', 'red');
+    expect(getStore().imageMap.get('img-1')?.colorLabel).toBe('none');
+  });
+
+  it('switches labels (red → blue, not toggle off)', () => {
+    seedStore({ images: [makeImage({ id: 'img-1', colorLabel: 'red' })] });
+    getStore().setColorLabel('img-1', 'blue');
+    expect(getStore().imageMap.get('img-1')?.colorLabel).toBe('blue');
+  });
 });
 
 // ============================================================

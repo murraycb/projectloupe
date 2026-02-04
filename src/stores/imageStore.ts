@@ -275,9 +275,11 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   setColorLabel: (imageId, label) => {
-    set((state) => ({ imageMap: updateInMap(state.imageMap, imageId, { colorLabel: label }) }));
+    const current = get().imageMap.get(imageId);
+    const newLabel = current && current.colorLabel === label ? 'none' : label;
+    set((state) => ({ imageMap: updateInMap(state.imageMap, imageId, { colorLabel: newLabel }) }));
     // Write-through to SQLite
-    invoke?.('persist_color_label', { filePath: imageId, colorLabel: label }).catch(() => {});
+    invoke?.('persist_color_label', { filePath: imageId, colorLabel: newLabel }).catch(() => {});
   },
 
   toggleSelection: (imageId) => {
