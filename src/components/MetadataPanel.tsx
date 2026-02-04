@@ -276,6 +276,27 @@ function MetadataPanel() {
                   </svg>
                 </div>
               )}
+
+              {/* Flag indicator */}
+              {selectedImage.flag === 'pick' && <div className="thumb-flag pick" />}
+              {selectedImage.flag === 'reject' && (
+                <>
+                  <div className="thumb-flag reject" />
+                  <div className="thumb-reject-line" />
+                </>
+              )}
+
+              {/* Star rating */}
+              {selectedImage.rating > 0 && (
+                <div className="thumb-stars">
+                  {'★'.repeat(selectedImage.rating)}
+                </div>
+              )}
+
+              {/* Color label strip */}
+              {selectedImage.colorLabel !== 'none' && (
+                <div className={`thumb-color-strip ${selectedImage.colorLabel}`} />
+              )}
             </div>
 
             <Histogram imageUrl={thumbnailUrl} />
