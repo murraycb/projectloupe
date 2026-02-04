@@ -45,11 +45,17 @@ function BurstGroup({ burstId }: BurstGroupProps) {
         <div className="image-stack">
           <div className="stack-layer stack-3"></div>
           <div className="stack-layer stack-2"></div>
-          <div className="image-placeholder" style={
-            coverImage.thumbnailUrl
-              ? { backgroundImage: `url(${coverImage.thumbnailUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-              : { backgroundColor: `hsl(${hue}, 60%, ${brightness * 100}%)` }
-          }>
+          <div className="image-placeholder">
+            <div className="burst-swatch" style={{ backgroundColor: coverImage.colorSwatch || `hsl(${hue}, 60%, ${brightness * 100}%)` }} />
+            {coverImage.thumbnailUrl && (
+              <img
+                className="burst-cover-img"
+                src={coverImage.thumbnailUrl}
+                alt={coverImage.filename}
+                draggable={false}
+                onLoad={(e) => e.currentTarget.classList.add('loaded')}
+              />
+            )}
             {!coverImage.thumbnailUrl && (
               <div className="camera-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">

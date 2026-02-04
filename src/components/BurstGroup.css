@@ -75,6 +75,25 @@
   justify-content: center;
 }
 
+.burst-swatch {
+  position: absolute;
+  inset: 0;
+}
+
+.burst-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 150ms ease-in;
+}
+
+.burst-cover-img.loaded {
+  opacity: 1;
+}
+
 .camera-icon {
   color: var(--pl-text-primary);
   opacity: 0.15;
