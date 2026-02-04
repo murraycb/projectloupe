@@ -96,6 +96,11 @@ interface ImageStore {
   loupePrev: () => void;
 
   // === Actions — display ===
+  thumbnailSize: number;                   // grid thumbnail width in px (100–400)
+  setThumbnailSize: (size: number) => void;
+  expandedBursts: Set<string>;             // burst IDs currently expanded in grid
+  toggleBurstExpanded: (burstId: string) => void;
+  collapseAllBursts: () => void;
   cycleOverlayMode: () => void;
 }
 
@@ -252,6 +257,8 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   importError: null,
   folderPath: null,
   loupe: { active: false, imageId: null, burstId: null, loupeUrls: {} },
+  thumbnailSize: 200,
+  expandedBursts: new Set<string>(),
   filters: {
     minRating: 0,
     flags: new Set(),
@@ -763,6 +770,26 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   extractThumbnails: async () => {
     // Legacy v1 action - now calls loadMicroThumbnails for backward compatibility
     await get().loadMicroThumbnails();
+  },
+
+  setThumbnailSize: (size) => {
+    set({ thumbnailSize: Math.max(100, Math.min(400, size)) });
+  },
+
+  toggleBurstExpanded: (burstId) => {
+    set((state) => {
+      const next = new Set(state.expandedBursts);
+      if (next.has(burstId)) {
+        next.delete(burstId);
+      } else {
+        next.add(burstId);
+      }
+      return { expandedBursts: next };
+    });
+  },
+
+  collapseAllBursts: () => {
+    set({ expandedBursts: new Set() });
   },
 
   cycleOverlayMode: () => {

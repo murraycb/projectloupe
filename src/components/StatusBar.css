@@ -31,6 +31,40 @@
 .status-item.pick { color: var(--pl-pick); }
 .status-item.reject { color: var(--pl-reject); }
 
+/* Thumbnail size slider */
+.thumbnail-slider {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--pl-text-tertiary);
+}
+
+.size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 3px;
+  background: var(--pl-border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  background: var(--pl-text-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--pl-transition-fast);
+}
+
+.size-slider::-webkit-slider-thumb:hover {
+  background: var(--pl-text-primary);
+}
+
 .status-theme-btn {
   background: none;
   border: none;

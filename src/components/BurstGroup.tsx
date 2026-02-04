@@ -13,7 +13,7 @@ interface BurstGroupProps {
 }
 
 function BurstGroup({ burstId }: BurstGroupProps) {
-  const { openLoupe, selectedIds } = useImageStore();
+  const { openLoupe, selectedIds, expandedBursts, toggleBurstExpanded } = useImageStore();
   const burst = useBurstGroup(burstId);
   const coverImage = useBurstCover(burstId);
   const allRejected = useBurstAllRejected(burstId);
@@ -22,6 +22,7 @@ function BurstGroup({ burstId }: BurstGroupProps) {
   if (!burst || !coverImage) return null;
 
   const isSelected = burst.imageIds.some((id) => selectedIds.has(id));
+  const isExpanded = expandedBursts.has(burstId);
 
   const hue = coverImage._placeholderHue || 0;
   const brightness = coverImage._placeholderBrightness || 0.5;
@@ -61,6 +62,15 @@ function BurstGroup({ burstId }: BurstGroupProps) {
             <div className="burst-count-badge">
               <span>{burst.frameCount}</span>
             </div>
+            <button
+              className={`burst-expand-btn ${isExpanded ? 'expanded' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleBurstExpanded(burstId); }}
+              title={isExpanded ? 'Collapse burst' : 'Expand burst'}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d={isExpanded ? 'M7 14l5-5 5 5z' : 'M7 10l5 5 5-5z'} />
+              </svg>
+            </button>
           </div>
         </div>
 

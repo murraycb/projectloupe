@@ -32,7 +32,6 @@
 }
 
 .grid-cell {
-  width: 200px;
   flex-shrink: 0;
 }
 

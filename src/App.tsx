@@ -43,6 +43,7 @@ function App() {
     selectedIds,
     clearSelection,
     cycleOverlayMode,
+    thumbnailSize,
     loupe,
     openLoupe,
   } = useImageStore();
@@ -105,9 +106,10 @@ function App() {
       }
     }
 
-    // Column count from grid element
+    // Column count derived from thumbnail size (matches ThumbnailGrid logic)
     const gridEl = document.querySelector('.thumbnail-grid');
-    const cols = gridEl ? Math.max(2, Math.floor(gridEl.clientWidth / 216)) : 5;
+    const cellWidth = thumbnailSize + 16;
+    const cols = gridEl ? Math.max(2, Math.floor(gridEl.clientWidth / cellWidth)) : Math.max(2, Math.floor(1200 / cellWidth));
 
     for (const [, sectionItems] of byCamera) {
       let currentRow: string[] = [];
@@ -125,7 +127,7 @@ function App() {
     }
 
     return { navItems: items, navRows: rows };
-  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode]);
+  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras, filters, isReviewMode, thumbnailSize]);
 
   // Theme
   useEffect(() => {

@@ -10,26 +10,28 @@ import './ThumbnailGrid.css';
 type DisplayItem =
   | { type: 'image'; id: string; data: ImageEntry }
   | { type: 'burst'; id: string; burstId: string }
+  | { type: 'burst-frame'; id: string; data: ImageEntry; burstId: string }
   | { type: 'camera-header'; id: string; data: { serial: string; label: string; count: number } };
 
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters } = useImageStore();
+  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, expandedBursts } = useImageStore();
 
-  // Responsive column count
+  // Responsive column count — derived from thumbnailSize
+  const cellWidth = thumbnailSize + 16; // thumbnail + gap/padding
   useEffect(() => {
     const updateColumns = () => {
       if (parentRef.current) {
         const width = parentRef.current.clientWidth;
-        setColumns(Math.max(2, Math.floor(width / 216)));
+        setColumns(Math.max(2, Math.floor(width / cellWidth)));
       }
     };
     updateColumns();
     const observer = new ResizeObserver(updateColumns);
     if (parentRef.current) observer.observe(parentRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [cellWidth]);
 
   // Filter images
   const filteredIds = useMemo(() => {
@@ -82,7 +84,7 @@ function ThumbnailGrid() {
     }
 
     return items;
-  }, [filteredIds, cameras, normalizedBurstGroups, imageMap, isReviewMode]);
+  }, [filteredIds, cameras, normalizedBurstGroups, imageMap, isReviewMode, expandedBursts]);
 
   function addImagesAsItems(
     imageIds: string[],
@@ -106,6 +108,15 @@ function ThumbnailGrid() {
             id: burst.id,
             burstId: burst.id,
           });
+          // If burst is expanded, add individual frames after the stack
+          if (expandedBursts.has(burst.id)) {
+            for (const frameId of burst.imageIds) {
+              const frameImg = imageMap.get(frameId);
+              if (frameImg) {
+                items.push({ type: 'burst-frame', data: frameImg, id: frameImg.id, burstId: burst.id });
+              }
+            }
+          }
         }
         processedBursts.add(img.burstGroupId);
       } else if (!img.burstGroupId) {
@@ -114,7 +125,8 @@ function ThumbnailGrid() {
     }
   }
 
-  const ITEM_HEIGHT = 250;
+  // Scale row height proportionally with thumbnail size
+  const ITEM_HEIGHT = Math.round(thumbnailSize * 1.25);
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
@@ -209,11 +221,13 @@ function ThumbnailGrid() {
               ) : (
                 <div className="grid-row">
                   {row.items.map((item) => (
-                    <div key={item.id} className="grid-cell">
+                    <div key={item.id} className="grid-cell" style={{ width: thumbnailSize }}>
                       {item.type === 'image' ? (
                         <ThumbnailCard image={item.data} />
                       ) : item.type === 'burst' ? (
                         <BurstGroup burstId={item.burstId} />
+                      ) : item.type === 'burst-frame' ? (
+                        <ThumbnailCard image={item.data} />
                       ) : null}
                     </div>
                   ))}

@@ -153,3 +153,29 @@
   gap: var(--pl-space-xs);
   overflow-x: auto;
 }
+
+/* Expand/collapse toggle */
+.burst-expand-btn {
+  position: absolute;
+  bottom: var(--pl-space-xs);
+  right: var(--pl-space-xs);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  line-height: 0;
+  opacity: 0;
+  transition: opacity var(--pl-transition-fast);
+}
+
+.image-placeholder:hover .burst-expand-btn,
+.burst-expand-btn.expanded {
+  opacity: 1;
+}
+
+.burst-expand-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
