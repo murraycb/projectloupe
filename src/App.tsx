@@ -334,7 +334,7 @@ function App() {
           });
           advanceIfFiltered();
           break;
-        case '1': case '2': case '3': case '4': case '5':
+        case '0': case '1': case '2': case '3': case '4': case '5':
           e.preventDefault();
           selectedArray.forEach(id => setRating(id, parseInt(e.key)));
           advanceIfFiltered();
