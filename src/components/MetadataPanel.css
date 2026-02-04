@@ -73,6 +73,36 @@
   margin: 0;
 }
 
+.multi-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pl-space-lg);
+}
+
+.multi-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pl-text-primary);
+  padding-bottom: var(--pl-space-xs);
+  border-bottom: 1px solid var(--pl-border);
+}
+
+.metadata-row .value.pick { color: var(--pl-pick); }
+.metadata-row .value.reject { color: var(--pl-reject); }
+
+.label-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.label-dot.red { background: var(--pl-label-red); }
+.label-dot.yellow { background: var(--pl-label-yellow); }
+.label-dot.green { background: var(--pl-label-green); }
+.label-dot.blue { background: var(--pl-label-blue); }
+.label-dot.purple { background: var(--pl-label-purple); }
+
 .metadata-content {
   display: flex;
   flex-direction: column;

@@ -135,6 +135,30 @@ function MetadataPanel() {
     ? (selectedImage.previewThumbnailUrl || selectedImage.microThumbnailUrl || selectedImage.thumbnailUrl)
     : undefined;
 
+  // Aggregate stats for multi-selection
+  const multiStats = useMemo(() => {
+    if (selectedIds.size <= 1) return null;
+    let picks = 0, rejects = 0, unflagged = 0, rated = 0;
+    let totalRating = 0;
+    const cameras = new Set<string>();
+    const labels = new Map<string, number>();
+
+    for (const id of selectedIds) {
+      const img = imageMap.get(id);
+      if (!img) continue;
+      if (img.flag === 'pick') picks++;
+      else if (img.flag === 'reject') rejects++;
+      else unflagged++;
+      if (img.rating > 0) { rated++; totalRating += img.rating; }
+      if (img.exif.camera) cameras.add(img.exif.camera);
+      if (img.colorLabel !== 'none') {
+        labels.set(img.colorLabel, (labels.get(img.colorLabel) || 0) + 1);
+      }
+    }
+
+    return { picks, rejects, unflagged, rated, avgRating: rated > 0 ? totalRating / rated : 0, cameras, labels };
+  }, [imageMap, selectedIds]);
+
   const selectionCount = selectedIds.size;
   const hasImages = imageMap.size > 0;
 
@@ -167,10 +191,69 @@ function MetadataPanel() {
           </div>
         )}
 
-        {selectionCount > 1 && (
-          <div className="panel-multi">
-            <p className="multi-count">{selectionCount} images selected</p>
-            <p className="multi-hint">Select a single image for details</p>
+        {selectionCount > 1 && multiStats && (
+          <div className="multi-summary">
+            <div className="multi-header">{selectionCount} images selected</div>
+
+            <div className="metadata-section">
+              <h4>Flags</h4>
+              {multiStats.picks > 0 && (
+                <div className="metadata-row">
+                  <span className="label">Picks</span>
+                  <span className="value pick">{multiStats.picks}</span>
+                </div>
+              )}
+              {multiStats.rejects > 0 && (
+                <div className="metadata-row">
+                  <span className="label">Rejects</span>
+                  <span className="value reject">{multiStats.rejects}</span>
+                </div>
+              )}
+              {multiStats.unflagged > 0 && (
+                <div className="metadata-row">
+                  <span className="label">Unflagged</span>
+                  <span className="value">{multiStats.unflagged}</span>
+                </div>
+              )}
+            </div>
+
+            {multiStats.rated > 0 && (
+              <div className="metadata-section">
+                <h4>Ratings</h4>
+                <div className="metadata-row">
+                  <span className="label">Rated</span>
+                  <span className="value">{multiStats.rated}</span>
+                </div>
+                <div className="metadata-row">
+                  <span className="label">Average</span>
+                  <span className="value">{'★'.repeat(Math.round(multiStats.avgRating))} {multiStats.avgRating.toFixed(1)}</span>
+                </div>
+              </div>
+            )}
+
+            {multiStats.labels.size > 0 && (
+              <div className="metadata-section">
+                <h4>Labels</h4>
+                {Array.from(multiStats.labels).map(([label, count]) => (
+                  <div className="metadata-row" key={label}>
+                    <span className={`label-dot ${label}`} />
+                    <span className="label" style={{ textTransform: 'capitalize' }}>{label}</span>
+                    <span className="value">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {multiStats.cameras.size > 0 && (
+              <div className="metadata-section">
+                <h4>Cameras</h4>
+                {Array.from(multiStats.cameras).map((cam) => (
+                  <div className="metadata-row" key={cam}>
+                    <span className="value" style={{ fontSize: '11px' }}>{cam}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
