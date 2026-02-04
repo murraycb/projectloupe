@@ -156,7 +156,8 @@ function ThumbnailGrid() {
   const BURST_INFO_HEIGHT = 38; // pad 4 + filename 16 + burst-info 14 + pad 4
   const ROW_GAP = 8;            // var(--pl-space-sm) padding-bottom on .grid-row
 
-  const singleCardHeight = thumbnailSize + (OVERLAY_HEIGHT[overlayMode] ?? 0);
+  const maxOverlay = OVERLAY_HEIGHT.full; // always reserve space for max overlay
+  const singleCardHeight = thumbnailSize + maxOverlay;
   const burstCardHeight = thumbnailSize + BURST_INFO_HEIGHT;
   const ITEM_HEIGHT = Math.max(singleCardHeight, burstCardHeight) + ROW_GAP;
   const HEADER_HEIGHT = 48;
