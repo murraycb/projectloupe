@@ -101,6 +101,20 @@
   justify-content: center;
 }
 
+.histogram-container {
+  width: 100%;
+  height: 64px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--pl-radius-sm);
+  overflow: hidden;
+}
+
+.histogram-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .metadata-filename {
   font-size: 13px;
   font-weight: 600;

@@ -1,6 +1,124 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useImageStore } from '../stores/imageStore';
 import './MetadataPanel.css';
+
+/** RGB histogram rendered via canvas. Samples from the thumbnail image. */
+function Histogram({ imageUrl }: { imageUrl: string | undefined }) {
+  const drawCanvasRef = useRef<HTMLCanvasElement>(null);
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const histDataRef = useRef<{ r: number[]; g: number[]; b: number[]; lum: number[] } | null>(null);
+  const lastUrlRef = useRef<string | undefined>();
+
+  const drawHistogram = useCallback(() => {
+    const canvas = drawCanvasRef.current;
+    const data = histDataRef.current;
+    if (!canvas || !data) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const W = Math.round(rect.width * dpr);
+    const H = Math.round(rect.height * dpr);
+    canvas.width = W;
+    canvas.height = H;
+    ctx.scale(dpr, dpr);
+
+    const w = rect.width;
+    const h = rect.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Find max for scaling (exclude bin 0 and 255 — they spike from clipping)
+    const maxVal = Math.max(
+      ...data.r.slice(1, 255),
+      ...data.g.slice(1, 255),
+      ...data.b.slice(1, 255),
+    );
+    if (maxVal === 0) return;
+
+    const binWidth = w / 256;
+
+    const drawChannel = (bins: number[], color: string) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      for (let i = 0; i < 256; i++) {
+        const val = Math.min(bins[i], maxVal);
+        const barH = (val / maxVal) * h;
+        ctx.lineTo(i * binWidth, h - barH);
+      }
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    drawChannel(data.lum, 'rgba(255, 255, 255, 0.1)');
+    drawChannel(data.r, 'rgba(255, 80, 80, 0.4)');
+    drawChannel(data.g, 'rgba(80, 200, 80, 0.35)');
+    drawChannel(data.b, 'rgba(100, 140, 255, 0.4)');
+  }, []);
+
+  useEffect(() => {
+    if (!imageUrl || imageUrl === lastUrlRef.current) return;
+    lastUrlRef.current = imageUrl;
+    histDataRef.current = null;
+
+    if (!offscreenRef.current) {
+      offscreenRef.current = document.createElement('canvas');
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = offscreenRef.current!;
+      const scale = Math.min(1, 200 / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0, w, h);
+      const pixels = ctx.getImageData(0, 0, w, h).data;
+
+      const r = new Array(256).fill(0);
+      const g = new Array(256).fill(0);
+      const b = new Array(256).fill(0);
+      const lum = new Array(256).fill(0);
+
+      for (let i = 0; i < pixels.length; i += 4) {
+        r[pixels[i]]++;
+        g[pixels[i + 1]]++;
+        b[pixels[i + 2]]++;
+        const l = Math.round(0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2]);
+        lum[Math.min(255, l)]++;
+      }
+
+      histDataRef.current = { r, g, b, lum };
+      drawHistogram();
+    };
+    img.src = imageUrl;
+  }, [imageUrl, drawHistogram]);
+
+  // Redraw on resize for crisp rendering
+  useEffect(() => {
+    const canvas = drawCanvasRef.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver(() => drawHistogram());
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [drawHistogram]);
+
+  if (!imageUrl) return null;
+
+  return (
+    <div className="histogram-container">
+      <canvas ref={drawCanvasRef} className="histogram-canvas" />
+    </div>
+  );
+}
 
 function MetadataPanel() {
   const { imageMap, selectedIds } = useImageStore();
@@ -12,6 +130,10 @@ function MetadataPanel() {
     const id = Array.from(selectedIds)[0];
     return imageMap.get(id) ?? null;
   }, [imageMap, selectedIds]);
+
+  const thumbnailUrl = selectedImage
+    ? (selectedImage.previewThumbnailUrl || selectedImage.microThumbnailUrl || selectedImage.thumbnailUrl)
+    : undefined;
 
   const selectionCount = selectedIds.size;
   const hasImages = imageMap.size > 0;
@@ -76,6 +198,8 @@ function MetadataPanel() {
                 </div>
               )}
             </div>
+
+            <Histogram imageUrl={thumbnailUrl} />
 
             <div className="metadata-filename">{selectedImage.filename}</div>
 
