@@ -27,7 +27,7 @@
 .panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--pl-space-lg);
+  padding: var(--pl-space-sm) var(--pl-space-lg);
 }
 
 .panel-empty {

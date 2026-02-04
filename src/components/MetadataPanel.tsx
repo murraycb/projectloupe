@@ -164,10 +164,6 @@ function MetadataPanel() {
 
   return (
     <div className="metadata-panel">
-      <div className="panel-header">
-        <h3>Info</h3>
-      </div>
-
       <div className="panel-body">
         {selectionCount === 0 && !hasImages && (
           <div className="panel-empty">

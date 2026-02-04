@@ -108,8 +108,14 @@ function App() {
 
     // Column count derived from thumbnail size (matches ThumbnailGrid logic)
     const gridEl = document.querySelector('.thumbnail-grid');
-    const cellWidth = thumbnailSize + 16;
-    const cols = gridEl ? Math.max(2, Math.floor(gridEl.clientWidth / cellWidth)) : Math.max(2, Math.floor(1200 / cellWidth));
+    const gridGap = useImageStore.getState().gridGap;
+    const cellWidth = thumbnailSize + gridGap;
+    let usable = 1200;
+    if (gridEl) {
+      const cs = getComputedStyle(gridEl);
+      usable = gridEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    }
+    const cols = Math.max(2, Math.floor((usable + gridGap) / cellWidth));
 
     for (const [, sectionItems] of byCamera) {
       let currentRow: string[] = [];

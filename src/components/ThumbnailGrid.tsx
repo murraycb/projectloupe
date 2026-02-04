@@ -19,19 +19,21 @@ function ThumbnailGrid() {
   const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, gridGap, expandedBursts } = useImageStore();
 
   // Responsive column count — derived from thumbnailSize + gridGap
-  const cellWidth = thumbnailSize + gridGap * 2; // thumbnail + gap on each side
+  // cellWidth = thumbnail + one gap (gap is between cells, not on edges)
+  const cellWidth = thumbnailSize + gridGap;
   useEffect(() => {
     const updateColumns = () => {
       if (parentRef.current) {
-        const width = parentRef.current.clientWidth;
-        setColumns(Math.max(2, Math.floor(width / cellWidth)));
+        const cs = getComputedStyle(parentRef.current);
+        const usable = parentRef.current.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        setColumns(Math.max(2, Math.floor((usable + gridGap) / cellWidth)));
       }
     };
     updateColumns();
     const observer = new ResizeObserver(updateColumns);
     if (parentRef.current) observer.observe(parentRef.current);
     return () => observer.disconnect();
-  }, [cellWidth]);
+  }, [cellWidth, gridGap]);
 
   // Filter images
   const filteredIds = useMemo(() => {
