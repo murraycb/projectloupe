@@ -70,6 +70,29 @@
   background: var(--pl-text-primary);
 }
 
+.status-flatten-btn {
+  background: none;
+  border: none;
+  color: var(--pl-text-tertiary);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--pl-radius-sm);
+  transition: all var(--pl-transition-fast);
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+}
+
+.status-flatten-btn:hover {
+  background: var(--pl-bg-hover);
+  opacity: 0.8;
+}
+
+.status-flatten-btn.active {
+  color: var(--pl-accent, #5e9cff);
+  opacity: 1;
+}
+
 .status-theme-btn {
   background: none;
   border: none;

@@ -16,7 +16,7 @@ type DisplayItem =
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, gridGap, expandedBursts } = useImageStore();
+  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, gridGap, expandedBursts, flattenBursts } = useImageStore();
 
   // Responsive column count — derived from thumbnailSize + gridGap
   // cellWidth = thumbnail + one gap (gap is between cells, not on edges)
@@ -86,7 +86,7 @@ function ThumbnailGrid() {
     }
 
     return items;
-  }, [filteredIds, cameras, normalizedBurstGroups, imageMap, isReviewMode, expandedBursts]);
+  }, [filteredIds, cameras, normalizedBurstGroups, imageMap, isReviewMode, expandedBursts, flattenBursts]);
 
   function addImagesAsItems(
     imageIds: string[],
@@ -105,7 +105,7 @@ function ThumbnailGrid() {
       if (img.burstGroupId && !processedBursts.has(img.burstGroupId)) {
         const burst = normalizedBurstGroups.find((b) => b.id === img.burstGroupId);
         if (burst) {
-          if (expandedBursts.has(burst.id)) {
+          if (flattenBursts || expandedBursts.has(burst.id)) {
             // Expanded: show individual frames only (no stack card)
             const frameCount = burst.imageIds.length;
             for (let i = 0; i < burst.imageIds.length; i++) {

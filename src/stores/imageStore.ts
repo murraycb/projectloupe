@@ -103,6 +103,8 @@ interface ImageStore {
   expandedBursts: Set<string>;             // burst IDs currently expanded in grid
   toggleBurstExpanded: (burstId: string) => void;
   collapseAllBursts: () => void;
+  flattenBursts: boolean;                  // view-level: show all frames individually
+  toggleFlattenBursts: () => void;
   cycleOverlayMode: () => void;
 }
 
@@ -262,6 +264,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   thumbnailSize: 200,
   gridGap: 8,
   expandedBursts: new Set<string>(),
+  flattenBursts: false,
   filters: {
     minRating: 0,
     flags: new Set(),
@@ -529,9 +532,11 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     if (!image) return;
 
     // Detect review mode: any content filter active → no burst scoping
+    // Flatten mode: also skip burst scoping — loupe navigates full shoot
     const isReviewMode = filters.minRating > 0 || filters.flags.size > 0 || filters.colorLabels.size > 0;
+    const { flattenBursts } = get();
 
-    const burstId = (!isReviewMode && burstIndex.get(imageId)) || null;
+    const burstId = (!isReviewMode && !flattenBursts && burstIndex.get(imageId)) || null;
 
     // Smart start frame: first pick > first unflagged > first frame
     let startId = imageId;
@@ -807,7 +812,11 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   collapseAllBursts: () => {
-    set({ expandedBursts: new Set() });
+    set({ expandedBursts: new Set(), flattenBursts: false });
+  },
+
+  toggleFlattenBursts: () => {
+    set((state) => ({ flattenBursts: !state.flattenBursts }));
   },
 
   cycleOverlayMode: () => {

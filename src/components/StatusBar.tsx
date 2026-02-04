@@ -8,7 +8,7 @@ interface StatusBarProps {
 }
 
 function StatusBar({ theme, onToggleTheme }: StatusBarProps) {
-  const { imageMap, normalizedBurstGroups, selectedIds, filters, overlayMode, thumbnailSize, setThumbnailSize, gridGap, setGridGap } = useImageStore();
+  const { imageMap, normalizedBurstGroups, selectedIds, filters, overlayMode, thumbnailSize, setThumbnailSize, gridGap, setGridGap, flattenBursts, toggleFlattenBursts } = useImageStore();
 
   const stats = useMemo(() => {
     const total = imageMap.size;
@@ -71,6 +71,25 @@ function StatusBar({ theme, onToggleTheme }: StatusBarProps) {
             {stats.rejects} rejects
           </span>
         )}
+        <button
+          className={`status-flatten-btn${flattenBursts ? ' active' : ''}`}
+          onClick={toggleFlattenBursts}
+          title="Flatten bursts — sequential view"
+        >
+          {flattenBursts ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="1" y="4" width="6" height="16" rx="1" />
+              <rect x="9" y="4" width="6" height="16" rx="1" />
+              <rect x="17" y="4" width="6" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="2" y="4" width="10" height="16" rx="1" />
+              <rect x="7" y="4" width="10" height="16" rx="1" opacity="0.6" />
+              <rect x="12" y="4" width="10" height="16" rx="1" opacity="0.3" />
+            </svg>
+          )}
+        </button>
         <div className="thumbnail-slider" title="Thumbnail size">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
             <rect x="3" y="3" width="8" height="8" rx="1" />
