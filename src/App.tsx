@@ -184,8 +184,8 @@ function App() {
         e.preventDefault();
         const currentId = selectedArray.length === 1 ? selectedArray[0] : null;
         let currentIdx = currentId ? navItems.indexOf(currentId) : -1;
-        if (currentIdx === -1 && currentId) {
-          // If selected image is inside a burst, find the burst's first image
+        if (currentIdx === -1 && currentId && !isReviewMode) {
+          // Default mode: if selected image is inside a burst, find the burst's cover
           const bId = burstIndex.get(currentId);
           if (bId) {
             const burst = normalizedBurstGroups.find((b) => b.id === bId);
