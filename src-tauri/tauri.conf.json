@@ -30,7 +30,14 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["$HOME/.projectloupe/**", "/tmp/**"],
+          "deny": []
+        }
+      }
     },
     "macOSPrivateApi": true
   },
@@ -39,13 +46,7 @@
   },
   "plugins": {
     "shell": {
-      "scope": [
-        {
-          "name": "shell:allow-open",
-          "cmd": "open",
-          "args": true
-        }
-      ]
+      "open": true
     }
   }
 }

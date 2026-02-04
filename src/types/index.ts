@@ -71,9 +71,12 @@ export interface ImageEntry {
   colorLabel: 'none' | 'red' | 'yellow' | 'green' | 'blue' | 'purple';
   burstGroupId: string | null;
   burstIndex: number | null;
-  // Mock placeholders (used when no real thumbnail)
-  _mockHue?: number;
-  _mockBrightness?: number;
+  // Thumbnail
+  thumbnailPath?: string;    // local file path to cached thumbnail
+  thumbnailUrl?: string;     // asset:// URL for rendering
+  // Placeholder colors (used when no thumbnail yet)
+  _placeholderHue?: number;
+  _placeholderBrightness?: number;
 }
 
 export interface BurstGroupData {

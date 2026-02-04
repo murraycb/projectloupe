@@ -52,7 +52,7 @@ impl BurstGroup {
             };
             
             let fps = if duration > 0 {
-                (frame_count as f64 * 1000.0) / duration as f64
+                ((frame_count - 1) as f64 * 1000.0) / duration as f64
             } else {
                 0.0
             };
@@ -118,7 +118,11 @@ impl BurstResult {
 pub struct BurstDetector;
 
 impl BurstDetector {
-    /// Detect burst groups from a collection of images
+    /// Detect burst groups from a collection of images.
+    ///
+    /// Strategy hierarchy:
+    /// 1. Camera-native BurstGroupID (e.g., Nikon) — ground truth
+    /// 2. Drive mode inference — consecutive continuous-mode frames
     pub fn detect(images: Vec<ExifData>) -> Result<BurstResult> {
         if images.is_empty() {
             return Ok(BurstResult {
@@ -127,6 +131,9 @@ impl BurstDetector {
                 cameras: Vec::new(),
             });
         }
+
+        // Check if any images have camera-native burst group IDs
+        let has_native_burst_ids = images.iter().any(|img| img.burst_group_id.is_some());
 
         // Step 1: Partition images by camera serial number
         let mut camera_partitions: HashMap<String, Vec<ExifData>> = HashMap::new();
@@ -155,19 +162,19 @@ impl BurstDetector {
                     make: first_img.make.clone().unwrap_or_else(|| "Unknown".to_string()),
                     model: first_img.model.clone().unwrap_or_else(|| "Unknown".to_string()),
                     image_count: camera_images.len(),
-                    burst_count: 0, // Will be updated below
+                    burst_count: 0,
                 }
             };
 
-            // Step 3: Detect bursts within this camera's images
-            let (camera_bursts, camera_singles) = Self::detect_bursts_for_camera(
-                camera_images, 
-                &serial, 
-                &mut burst_id_counter, 
-                &mut single_id_counter
-            );
+            // Step 3: Detect bursts — choose strategy based on available data
+            let camera_has_native_ids = camera_images.iter().any(|img| img.burst_group_id.is_some());
+            
+            let (camera_bursts, camera_singles) = if camera_has_native_ids {
+                Self::detect_by_native_id(camera_images, &serial, &mut burst_id_counter)
+            } else {
+                Self::detect_by_drive_mode(camera_images, &serial, &mut burst_id_counter, &mut single_id_counter)
+            };
 
-            // Update camera info with actual burst count
             let mut camera_info = camera_info;
             camera_info.burst_count = camera_bursts.len();
             
@@ -183,8 +190,55 @@ impl BurstDetector {
         })
     }
 
-    /// Detect bursts within a single camera's images
-    fn detect_bursts_for_camera(
+    /// Strategy 1: Use camera-native BurstGroupID (Nikon, etc.)
+    fn detect_by_native_id(
+        images: Vec<ExifData>,
+        camera_serial: &str,
+        burst_id_counter: &mut usize,
+    ) -> (Vec<BurstGroup>, Vec<ExifData>) {
+        let mut bursts = Vec::new();
+        let mut singles = Vec::new();
+
+        // Group by native burst group ID
+        let mut groups: HashMap<u64, Vec<ExifData>> = HashMap::new();
+        let mut no_id: Vec<ExifData> = Vec::new();
+
+        for image in images {
+            if let Some(bg_id) = image.burst_group_id {
+                groups.entry(bg_id).or_default().push(image);
+            } else {
+                no_id.push(image);
+            }
+        }
+
+        // Convert groups to BurstGroups (only if >= 2 frames)
+        for (_native_id, mut group_images) in groups {
+            group_images.sort_by_key(|img| img.capture_time);
+
+            if group_images.len() >= 2 {
+                let burst = BurstGroup::new(
+                    format!("burst_{}", burst_id_counter),
+                    camera_serial.to_string(),
+                    group_images,
+                );
+                bursts.push(burst);
+                *burst_id_counter += 1;
+            } else {
+                // Single-frame "burst" (e.g., quick tap in continuous mode)
+                singles.extend(group_images);
+            }
+        }
+
+        singles.extend(no_id);
+
+        // Sort bursts by first image timestamp for consistent ordering
+        bursts.sort_by_key(|b| b.images.first().map(|img| img.capture_time));
+
+        (bursts, singles)
+    }
+
+    /// Strategy 2: Infer bursts from consecutive continuous drive mode frames
+    fn detect_by_drive_mode(
         images: Vec<ExifData>, 
         camera_serial: &str,
         burst_id_counter: &mut usize,
@@ -196,22 +250,15 @@ impl BurstDetector {
 
         for image in images {
             let should_extend_burst = if let Some(last_image) = current_burst.last() {
-                // Check if this image extends the current burst:
-                // 1. Both images must be in continuous drive mode
-                // 2. Previous image was also continuous
                 image.drive_mode.is_continuous() && last_image.drive_mode.is_continuous()
             } else {
-                // First image in potential burst
                 image.drive_mode.is_continuous()
             };
 
             if should_extend_burst {
-                // Extend current burst
                 current_burst.push(image);
             } else {
-                // End current burst (if it has enough frames) and start fresh
                 if current_burst.len() >= 2 {
-                    // Finalize the burst
                     let burst = BurstGroup::new(
                         format!("burst_{}", burst_id_counter),
                         camera_serial.to_string(),
@@ -220,7 +267,6 @@ impl BurstDetector {
                     bursts.push(burst);
                     *burst_id_counter += 1;
                 } else {
-                    // Add any single images from the incomplete burst to singles
                     for img in current_burst.drain(..) {
                         singles.push(img);
                     }
@@ -228,11 +274,9 @@ impl BurstDetector {
 
                 current_burst.clear();
 
-                // Start new potential burst if this image is continuous
                 if image.drive_mode.is_continuous() {
                     current_burst.push(image);
                 } else {
-                    // Single shot image
                     singles.push(image);
                 }
             }
@@ -248,7 +292,6 @@ impl BurstDetector {
             bursts.push(burst);
             *burst_id_counter += 1;
         } else {
-            // Add remaining images to singles
             for img in current_burst {
                 singles.push(img);
             }
@@ -277,6 +320,18 @@ mod tests {
             drive_mode,
             Utc.timestamp_opt(timestamp_secs, 0).unwrap(),
         )
+    }
+
+    fn create_test_image_with_burst_id(
+        path: &str,
+        serial: &str,
+        drive_mode: DriveMode,
+        timestamp_secs: i64,
+        burst_id: u64,
+    ) -> ExifData {
+        let mut img = create_test_image(path, serial, drive_mode, timestamp_secs);
+        img.burst_group_id = Some(burst_id);
+        img
     }
 
     #[test]
@@ -376,7 +431,7 @@ mod tests {
         assert_eq!(burst.frame_count, 4);
         assert_eq!(burst.duration_ms, 4000); // 4 seconds total
         assert_eq!(burst.avg_gap_ms, (1000.0 + 1000.0 + 2000.0) / 3.0); // Average of gaps
-        assert_eq!(burst.estimated_fps, 1.0); // 4 frames in 4 seconds = 1 fps
+        assert_eq!(burst.estimated_fps, 0.75); // 3 intervals in 4 seconds = 0.75 fps
     }
 
     #[test]
@@ -404,6 +459,57 @@ mod tests {
         
         assert_eq!(result.bursts.len(), 0);
         assert_eq!(result.singles.len(), 2);
+    }
+
+    #[test]
+    fn test_native_burst_id_grouping() {
+        let images = vec![
+            create_test_image_with_burst_id("img001.jpg", "cam1", DriveMode::ContinuousHigh, 1000, 100),
+            create_test_image_with_burst_id("img002.jpg", "cam1", DriveMode::ContinuousHigh, 1001, 100),
+            create_test_image_with_burst_id("img003.jpg", "cam1", DriveMode::ContinuousHigh, 1002, 100),
+            create_test_image_with_burst_id("img004.jpg", "cam1", DriveMode::ContinuousHigh, 1010, 200),
+            create_test_image_with_burst_id("img005.jpg", "cam1", DriveMode::ContinuousHigh, 1011, 200),
+        ];
+
+        let result = BurstDetector::detect(images).unwrap();
+
+        assert_eq!(result.bursts.len(), 2);
+        assert_eq!(result.singles.len(), 0);
+        assert_eq!(result.bursts[0].frame_count, 3);
+        assert_eq!(result.bursts[1].frame_count, 2);
+    }
+
+    #[test]
+    fn test_native_burst_id_single_frame_not_burst() {
+        // Single-frame "bursts" (quick tap in CH mode) should be singles
+        let images = vec![
+            create_test_image_with_burst_id("img001.jpg", "cam1", DriveMode::ContinuousHigh, 1000, 100),
+            create_test_image_with_burst_id("img002.jpg", "cam1", DriveMode::ContinuousHigh, 1010, 200),
+            create_test_image_with_burst_id("img003.jpg", "cam1", DriveMode::ContinuousHigh, 1011, 200),
+        ];
+
+        let result = BurstDetector::detect(images).unwrap();
+
+        assert_eq!(result.bursts.len(), 1); // Only burst 200
+        assert_eq!(result.singles.len(), 1); // Burst 100 was single-frame
+        assert_eq!(result.bursts[0].frame_count, 2);
+    }
+
+    #[test]
+    fn test_mixed_native_and_no_id_cameras() {
+        // Camera 1 has native burst IDs, camera 2 doesn't
+        let mut img1 = create_test_image("img001.jpg", "cam1", DriveMode::ContinuousHigh, 1000);
+        img1.burst_group_id = Some(100);
+        let mut img2 = create_test_image("img002.jpg", "cam1", DriveMode::ContinuousHigh, 1001);
+        img2.burst_group_id = Some(100);
+        let img3 = create_test_image("img003.jpg", "cam2", DriveMode::ContinuousHigh, 1000);
+        let img4 = create_test_image("img004.jpg", "cam2", DriveMode::ContinuousHigh, 1001);
+
+        let images = vec![img1, img2, img3, img4];
+        let result = BurstDetector::detect(images).unwrap();
+
+        assert_eq!(result.bursts.len(), 2); // One from each camera
+        assert_eq!(result.cameras.len(), 2);
     }
 
     #[test]

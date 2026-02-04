@@ -34,4 +34,5 @@ src-tauri/gen
 
 # OS
 .DS_Store
-Thumbs.db
+Thumbs.dbtest-raws/
+test-raws/

@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 # Tauri core
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2", features = ["macos-private-api"] }
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 
@@ -27,6 +27,7 @@ tokio = { workspace = true }
 
 # Local crates
 burst-detection = { path = "../crates/burst-detection" }
+dirs = "6.0.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-shell = "2"

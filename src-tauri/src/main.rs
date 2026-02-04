@@ -1,10 +1,11 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
-use tauri::{command, State};
+use tauri::{command, State, Manager, Emitter};
 use burst_detection::{BurstDetector, BurstResult, ExifData, ExiftoolRunner};
 
 /// Supported image file extensions
@@ -19,11 +20,16 @@ struct AppState {
     exiftool: Mutex<Option<ExiftoolRunner>>,
     /// Last analysis result (cached for frontend queries)
     last_result: Mutex<Option<BurstResult>>,
+    /// Cache directory for thumbnails
+    cache_dir: PathBuf,
+    /// Map of source file path → thumbnail cache path
+    thumbnail_cache: Mutex<HashMap<String, String>>,
 }
 
 // -- Command payloads --
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ImportRequest {
     folder_path: String,
 }
@@ -82,6 +88,8 @@ struct ImagePayload {
     aperture: Option<f64>,
     shutter_speed: Option<String>,
     iso: Option<u32>,
+    burst_group_id: Option<u64>,
+    high_frame_rate: Option<String>,
 }
 
 // -- Conversions --
@@ -103,6 +111,8 @@ fn exif_to_payload(exif: &ExifData) -> ImagePayload {
         aperture: exif.aperture,
         shutter_speed: exif.shutter_speed.clone(),
         iso: exif.iso,
+        burst_group_id: exif.burst_group_id,
+        high_frame_rate: exif.high_frame_rate.clone(),
     }
 }
 
@@ -201,6 +211,86 @@ async fn get_analysis(state: State<'_, AppState>) -> Result<Option<BurstResultPa
     Ok(cache.as_ref().map(result_to_payload))
 }
 
+/// Extract embedded JPEG previews from image files into the cache directory.
+/// Uses exiftool -PreviewImage for grid thumbnails (~640px, ~150KB each).
+/// Returns a map of source file path → thumbnail file path.
+#[command]
+async fn extract_thumbnails(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<HashMap<String, String>, String> {
+    let result_guard = state.last_result.lock().map_err(|e| e.to_string())?;
+    let result = result_guard.as_ref().ok_or("No import result — import a folder first")?;
+
+    // Collect all image paths
+    let mut all_paths: Vec<&PathBuf> = Vec::new();
+    for burst in &result.bursts {
+        for img in &burst.images {
+            all_paths.push(&img.file_path);
+        }
+    }
+    for img in &result.singles {
+        all_paths.push(&img.file_path);
+    }
+
+    let thumb_dir = state.cache_dir.join("thumbnails");
+    std::fs::create_dir_all(&thumb_dir).map_err(|e| format!("Failed to create thumbnail dir: {}", e))?;
+
+    // Run exiftool to extract PreviewImage for all files
+    // exiftool -b -PreviewImage -w <thumb_dir>/%f.jpg <files...>
+    let mut cmd = std::process::Command::new("exiftool");
+    cmd.arg("-b")
+       .arg("-PreviewImage")
+       .arg("-w")
+       .arg(format!("{}/%f.jpg", thumb_dir.display()));
+
+    for path in &all_paths {
+        cmd.arg(path.as_os_str());
+    }
+
+    let output = cmd.output().map_err(|e| format!("Failed to run exiftool for thumbnails: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("exiftool thumbnail extraction stderr: {}", stderr);
+        // Don't fail — some files might not have PreviewImage
+    }
+
+    // Build mapping: source path → thumbnail path
+    let mut thumb_map = HashMap::new();
+    for path in &all_paths {
+        let stem = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        let thumb_path = thumb_dir.join(format!("{}.jpg", stem));
+        if thumb_path.exists() {
+            let source_key = path.display().to_string();
+            let thumb_value = thumb_path.display().to_string();
+            thumb_map.insert(source_key, thumb_value);
+        }
+    }
+
+    // Cache the mappings
+    if let Ok(mut cache) = state.thumbnail_cache.lock() {
+        cache.extend(thumb_map.clone());
+    }
+
+    // Emit event so frontend knows thumbnails are ready
+    let _ = app.emit("thumbnails-ready", thumb_map.len());
+
+    Ok(thumb_map)
+}
+
+/// Get the thumbnail path for a single image (if cached)
+#[command]
+async fn get_thumbnail(
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let cache = state.thumbnail_cache.lock().map_err(|e| e.to_string())?;
+    Ok(cache.get(&file_path).cloned())
+}
+
 #[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -232,17 +322,29 @@ fn scan_folder(folder: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
 // -- Main --
 
 fn main() {
+    let cache_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".projectloupe")
+        .join("cache");
+
+    // Ensure cache dir exists
+    let _ = std::fs::create_dir_all(&cache_dir);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             exiftool: Mutex::new(None),
             last_result: Mutex::new(None),
+            cache_dir,
+            thumbnail_cache: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
             greet,
             import_folder,
             get_analysis,
+            extract_thumbnails,
+            get_thumbnail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

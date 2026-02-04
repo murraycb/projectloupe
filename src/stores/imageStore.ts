@@ -10,20 +10,21 @@ import {
   BurstPayload,
 } from '../types';
 
-// Conditional Tauri import — falls back to mock when running in browser
+// Conditional Tauri import
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let openDialog: ((options: Record<string, unknown>) => Promise<string | null>) | null = null;
+let convertFileSrc: ((path: string) => string) | null = null;
 
 // Lazy-load Tauri APIs (they throw outside Tauri runtime)
 async function loadTauriApis() {
   try {
     const tauri = await import('@tauri-apps/api/core');
     invoke = tauri.invoke;
+    convertFileSrc = tauri.convertFileSrc;
     const dialog = await import('@tauri-apps/plugin-dialog');
     openDialog = dialog.open as any;
   } catch {
-    // Running in browser — Tauri APIs unavailable
-    console.info('Tauri APIs not available, using mock mode');
+    console.info('Tauri APIs not available');
   }
 }
 loadTauriApis();
@@ -60,7 +61,8 @@ interface ImageStore {
 
   // Actions — import
   importFolder: () => Promise<void>;
-  importMock: () => Promise<void>;
+  importPath: (folderPath: string) => Promise<void>;
+  extractThumbnails: () => Promise<void>;
 
   // Actions — display
   cycleOverlayMode: () => void;
@@ -98,8 +100,8 @@ function payloadToEntry(img: ImagePayload, burstId: string | null, burstIndex: n
     colorLabel: 'none',
     burstGroupId: burstId,
     burstIndex,
-    _mockHue: Math.abs(hash) % 360,
-    _mockBrightness: 0.3 + (Math.abs(hash >> 8) % 40) / 100,
+    _placeholderHue: Math.abs(hash) % 360,
+    _placeholderBrightness: 0.3 + (Math.abs(hash >> 8) % 40) / 100,
   };
 }
 
@@ -222,7 +224,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       }
 
       if (!openDialog || !invoke) {
-        throw new Error('Tauri APIs not available. Use mock import for browser testing.');
+        throw new Error('Tauri APIs not available — must run inside Tauri.');
       }
 
       const selectedPath = await openDialog({
@@ -237,11 +239,13 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       }
 
       const folderPath = typeof selectedPath === 'string' ? selectedPath : (selectedPath as string[])[0];
+      console.log('Selected folder:', folderPath);
 
       // Call Tauri backend
       const response = await invoke('import_folder', {
-        request: { folder_path: folderPath },
+        request: { folderPath: folderPath },
       }) as ImportResult;
+      console.log('Import response:', response);
 
       if (!response.success || !response.result) {
         throw new Error(response.error || 'Import failed');
@@ -285,18 +289,123 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         selectedIds: new Set(),
         expandedBursts: new Set(),
       });
+
+      // Phase 2: Extract thumbnails in background
+      get().extractThumbnails();
     } catch (err: any) {
+      console.error('Import error:', err);
+      const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || 'Unknown import error');
       set({
         isImporting: false,
-        importError: err.message || 'Unknown import error',
+        importError: errorMsg,
       });
     }
   },
 
-  // Mock import for browser dev
-  importMock: async () => {
-    const { generateMockImages } = await import('../mock/generateMockData');
-    set({ images: generateMockImages(), isImporting: false, importError: null });
+  // Import a specific folder path (for dev/testing — bypasses dialog)
+  importPath: async (folderPath: string) => {
+    set({ isImporting: true, importError: null });
+
+    try {
+      if (!invoke) await loadTauriApis();
+      if (!invoke) throw new Error('Tauri APIs not available');
+
+      console.log('Importing path:', folderPath);
+      const response = await invoke('import_folder', {
+        request: { folderPath },
+      }) as ImportResult;
+      console.log('Import response:', response);
+
+      if (!response.success || !response.result) {
+        throw new Error(response.error || 'Import failed');
+      }
+
+      const data = response.result;
+      const allImages: ImageEntry[] = [];
+      const burstGroups: BurstGroupData[] = [];
+
+      for (const burst of data.bursts) {
+        const { group, entries } = burstPayloadToGroup(burst);
+        burstGroups.push(group);
+        allImages.push(...entries);
+      }
+
+      for (const single of data.singles) {
+        allImages.push(payloadToEntry(single, null, null));
+      }
+
+      allImages.sort((a, b) => a.timestamp - b.timestamp);
+
+      const cameras: CameraGroup[] = data.cameras.map((c) => ({
+        serial: c.serial,
+        make: c.make,
+        model: c.model,
+        imageCount: c.image_count,
+        burstCount: c.burst_count,
+      }));
+
+      set({
+        images: allImages,
+        burstGroups,
+        cameras,
+        folderPath,
+        isImporting: false,
+        importError: null,
+        selectedIds: new Set(),
+        expandedBursts: new Set(),
+      });
+
+      // Phase 2: Extract thumbnails in background
+      get().extractThumbnails();
+    } catch (err: any) {
+      console.error('Import error:', err);
+      const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || 'Unknown error');
+      set({ isImporting: false, importError: errorMsg });
+    }
+  },
+
+  extractThumbnails: async () => {
+    try {
+      if (!invoke) await loadTauriApis();
+      if (!invoke || !convertFileSrc) return;
+
+      console.time('thumbnail extraction');
+      const thumbMap = await invoke('extract_thumbnails', {}) as Record<string, string>;
+      console.timeEnd('thumbnail extraction');
+      console.log(`Extracted ${Object.keys(thumbMap).length} thumbnails`);
+
+      // Update images with thumbnail URLs
+      set((state) => ({
+        images: state.images.map((img) => {
+          const thumbPath = thumbMap[img.path];
+          if (thumbPath && convertFileSrc) {
+            return {
+              ...img,
+              thumbnailPath: thumbPath,
+              thumbnailUrl: convertFileSrc(thumbPath),
+            };
+          }
+          return img;
+        }),
+        burstGroups: state.burstGroups.map((burst) => ({
+          ...burst,
+          images: burst.images.map((img) => {
+            const thumbPath = thumbMap[img.path];
+            if (thumbPath && convertFileSrc) {
+              return {
+                ...img,
+                thumbnailPath: thumbPath,
+                thumbnailUrl: convertFileSrc(thumbPath),
+              };
+            }
+            return img;
+          }),
+        })),
+      }));
+    } catch (err) {
+      console.error('Thumbnail extraction failed:', err);
+      // Non-fatal — grid still works with placeholders
+    }
   },
 
   cycleOverlayMode: () => {

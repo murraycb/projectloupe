@@ -38,6 +38,10 @@ pub struct ExifData {
     pub shutter_speed: Option<String>,
     pub iso: Option<u32>,
     pub file_path: PathBuf,
+    /// Camera-native burst group ID (e.g., Nikon BurstGroupID)
+    pub burst_group_id: Option<u64>,
+    /// High frame rate mode (e.g., "CH", "CL", "Off")
+    pub high_frame_rate: Option<String>,
 }
 
 impl ExifData {
@@ -55,15 +59,64 @@ impl ExifData {
             shutter_speed: None,
             iso: None,
             file_path,
+            burst_group_id: None,
+            high_frame_rate: None,
         }
     }
 }
 
+/// Deserialize a value that could be a string or number into Option<String>
+fn deserialize_string_or_number<'de, D>(deserializer: D) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct StringOrNumber;
+    impl<'de> de::Visitor<'de> for StringOrNumber {
+        type Value = Option<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or number")
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> std::result::Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+
+        fn visit_string<E: de::Error>(self, v: String) -> std::result::Result<Self::Value, E> {
+            Ok(Some(v))
+        }
+
+        fn visit_i64<E: de::Error>(self, v: i64) -> std::result::Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+
+        fn visit_u64<E: de::Error>(self, v: u64) -> std::result::Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+
+        fn visit_f64<E: de::Error>(self, v: f64) -> std::result::Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+
+        fn visit_none<E: de::Error>(self) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: de::Error>(self) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+
+    deserializer.deserialize_any(StringOrNumber)
+}
+
 #[derive(Deserialize)]
 struct ExiftoolOutput {
-    #[serde(rename = "SerialNumber")]
+    #[serde(rename = "SerialNumber", deserialize_with = "deserialize_string_or_number", default)]
     serial_number: Option<String>,
-    #[serde(rename = "InternalSerialNumber")]
+    #[serde(rename = "InternalSerialNumber", deserialize_with = "deserialize_string_or_number", default)]
     internal_serial_number: Option<String>,
     #[serde(rename = "DriveMode")]
     drive_mode: Option<String>,
@@ -71,7 +124,7 @@ struct ExiftoolOutput {
     shooting_mode: Option<String>,
     #[serde(rename = "DateTimeOriginal")]
     date_time_original: Option<String>,
-    #[serde(rename = "SubSecTimeOriginal")]
+    #[serde(rename = "SubSecTimeOriginal", deserialize_with = "deserialize_string_or_number", default)]
     subsec_time_original: Option<String>,
     #[serde(rename = "Make")]
     make: Option<String>,
@@ -81,12 +134,16 @@ struct ExiftoolOutput {
     lens_model: Option<String>,
     #[serde(rename = "FocalLength")]
     focal_length: Option<String>,
-    #[serde(rename = "Aperture")]
+    #[serde(rename = "Aperture", deserialize_with = "deserialize_string_or_number", default)]
     aperture: Option<String>,
-    #[serde(rename = "ShutterSpeed")]
+    #[serde(rename = "ShutterSpeed", deserialize_with = "deserialize_string_or_number", default)]
     shutter_speed: Option<String>,
     #[serde(rename = "ISO")]
-    iso: Option<u32>,
+    iso: Option<serde_json::Value>,
+    #[serde(rename = "BurstGroupID")]
+    burst_group_id: Option<u64>,
+    #[serde(rename = "HighFrameRate")]
+    high_frame_rate: Option<String>,
     #[serde(rename = "SourceFile")]
     source_file: String,
 }
@@ -133,11 +190,13 @@ impl ExiftoolRunner {
 
         // Write exiftool arguments
         writeln!(self.stdin, "-json")?;
-        writeln!(self.stdin, "-fast2")?;
+        writeln!(self.stdin, "-fast")?;  // -fast not -fast2: we need maker notes for BurstGroupID
         writeln!(self.stdin, "-SerialNumber")?;
         writeln!(self.stdin, "-InternalSerialNumber")?;
         writeln!(self.stdin, "-DriveMode")?;
         writeln!(self.stdin, "-ShootingMode")?;
+        writeln!(self.stdin, "-BurstGroupID")?;
+        writeln!(self.stdin, "-HighFrameRate")?;
         writeln!(self.stdin, "-DateTimeOriginal")?;
         writeln!(self.stdin, "-SubSecTimeOriginal")?;
         writeln!(self.stdin, "-Make")?;
@@ -166,7 +225,8 @@ impl ExiftoolRunner {
                 bail!("Unexpected EOF from exiftool process");
             }
 
-            if line.trim() == "{ready}" {
+            let trimmed = line.trim();
+            if trimmed.starts_with("{ready") && trimmed.ends_with("}") {
                 break;
             }
             json_output.push_str(&line);
@@ -174,7 +234,14 @@ impl ExiftoolRunner {
 
         // Parse JSON output
         let exiftool_data: Vec<ExiftoolOutput> = serde_json::from_str(&json_output)
-            .context("Failed to parse exiftool JSON output")?;
+            .with_context(|| {
+                let preview = if json_output.len() > 500 {
+                    format!("{}...(truncated, {} bytes total)", &json_output[..500], json_output.len())
+                } else {
+                    json_output.clone()
+                };
+                format!("Failed to parse exiftool JSON output. First bytes: {}", preview)
+            })?;
 
         // Convert to our ExifData format
         let mut results = Vec::new();
@@ -223,6 +290,12 @@ impl ExiftoolRunner {
             let aperture = data.aperture.as_ref()
                 .and_then(|a| a.parse().ok());
 
+            let iso = data.iso.and_then(|v| match v {
+                serde_json::Value::Number(n) => n.as_u64().map(|n| n as u32),
+                serde_json::Value::String(s) => s.parse().ok(),
+                _ => None,
+            });
+
             results.push(ExifData {
                 serial_number,
                 drive_mode,
@@ -233,8 +306,10 @@ impl ExiftoolRunner {
                 focal_length,
                 aperture,
                 shutter_speed: data.shutter_speed,
-                iso: data.iso,
+                iso,
                 file_path,
+                burst_group_id: data.burst_group_id,
+                high_frame_rate: data.high_frame_rate,
             });
         }
 

@@ -2,22 +2,13 @@ import { useImageStore } from '../stores/imageStore';
 import './IngestPanel.css';
 
 function IngestPanel() {
-  const { importFolder, importMock, isImporting, importError } = useImageStore();
-
-  const handleClick = () => {
-    importFolder();
-  };
-
-  const handleMock = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    importMock();
-  };
+  const { importFolder, isImporting, importError } = useImageStore();
 
   return (
     <div className="ingest-panel-inline">
       <div
         className={`drop-zone ${isImporting ? 'importing' : ''}`}
-        onClick={!isImporting ? handleClick : undefined}
+        onClick={!isImporting ? importFolder : undefined}
       >
         {isImporting ? (
           <div className="import-progress">
@@ -34,9 +25,6 @@ function IngestPanel() {
             <h3>Import Photos</h3>
             <p>Click to select a folder</p>
             <p className="hint">Supports RAW (CR3, NEF, ARW, DNG, RAF) and JPEG</p>
-            <button className="mock-button" onClick={handleMock}>
-              Load mock data
-            </button>
           </>
         )}
         {importError && (

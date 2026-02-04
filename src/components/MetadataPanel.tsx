@@ -55,7 +55,7 @@ function MetadataPanel() {
               <div
                 className="preview-placeholder"
                 style={{
-                  backgroundColor: `hsl(${(selectedImage as any)._mockHue || 200}, 60%, ${((selectedImage as any)._mockBrightness || 0.5) * 100}%)`,
+                  backgroundColor: `hsl(${(selectedImage as any)._placeholderHue || 200}, 60%, ${((selectedImage as any)._placeholderBrightness || 0.5) * 100}%)`,
                 }}
               >
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">

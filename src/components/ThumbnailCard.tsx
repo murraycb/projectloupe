@@ -10,8 +10,8 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
   const { selectedIds, toggleSelection, overlayMode } = useImageStore();
   const isSelected = selectedIds.has(image.id);
 
-  const hue = image._mockHue || 0;
-  const brightness = image._mockBrightness || 0.5;
+  const hue = image._placeholderHue || 0;
+  const brightness = image._placeholderBrightness || 0.5;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -24,10 +24,20 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
       onClick={handleClick}
     >
       <div className="thumb-image">
-        <div
-          className="thumb-placeholder"
-          style={{ backgroundColor: `hsl(${hue}, 50%, ${brightness * 60 + 20}%)` }}
-        />
+        {image.thumbnailUrl ? (
+          <img
+            className="thumb-img"
+            src={image.thumbnailUrl}
+            alt={image.filename}
+            loading="lazy"
+            draggable={false}
+          />
+        ) : (
+          <div
+            className="thumb-placeholder"
+            style={{ backgroundColor: `hsl(${hue}, 50%, ${brightness * 60 + 20}%)` }}
+          />
+        )}
 
         {/* Flag indicator */}
         {image.flag === 'pick' && <div className="thumb-flag pick" />}
