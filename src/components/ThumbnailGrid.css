@@ -3,7 +3,7 @@
   height: 100%;
   overflow-y: scroll;  /* always show scrollbar track */
   overflow-x: hidden;
-  padding: var(--pl-space-sm);
+  /* padding set via inline style from gridGap */
 }
 
 /* Scrollbar — always visible */

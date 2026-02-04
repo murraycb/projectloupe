@@ -200,7 +200,7 @@ function ThumbnailGrid() {
   // Empty state
   if (imageMap.size === 0) {
     return (
-      <div ref={parentRef} className="thumbnail-grid">
+      <div ref={parentRef} className="thumbnail-grid" style={{ padding: gridGap }}>
         <IngestPanel />
       </div>
     );
@@ -209,7 +209,7 @@ function ThumbnailGrid() {
   // No results from filters
   if (displayItems.length === 0) {
     return (
-      <div ref={parentRef} className="thumbnail-grid">
+      <div ref={parentRef} className="thumbnail-grid" style={{ padding: gridGap }}>
         <div className="empty-state">
           <p className="empty-title">No images match filters</p>
           <p className="empty-hint">Try adjusting or clearing your filters</p>
@@ -219,7 +219,7 @@ function ThumbnailGrid() {
   }
 
   return (
-    <div ref={parentRef} className="thumbnail-grid">
+    <div ref={parentRef} className="thumbnail-grid" style={{ padding: gridGap }}>
       {/* Hidden measurement cards — derive row height from actual DOM rendering.
           Renders both card types at max content so the grid always reserves enough
           space. Self-heals when CSS changes, new widgets added, fonts load, etc. */}
