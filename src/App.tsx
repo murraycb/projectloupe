@@ -275,11 +275,14 @@ function App() {
 
       if (selectedArray.length === 0) return;
 
-      // Burst-aware flagging helper — in review mode, only affect individual image
+      // Burst-aware mutation helper — returns all burst IDs for burst-level
+      // operations, or null for individual behavior.
+      // Individual when: review mode OR burst is expanded (per spec)
       const getBurstIds = (id: string): string[] | null => {
-        if (isReviewMode) return null; // Review mode: individual behavior
+        if (isReviewMode) return null;
         const bId = burstIndex.get(id);
         if (!bId) return null;
+        if (expandedBursts.has(bId)) return null; // Expanded = frame-level
         const burst = normalizedBurstGroups.find((b) => b.id === bId);
         return burst ? burst.imageIds : null;
       };

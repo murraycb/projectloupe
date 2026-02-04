@@ -80,7 +80,12 @@ function ThumbnailCard({ image, burstId, frameIndex, frameCount }: ThumbnailCard
             onClick={(e) => { e.stopPropagation(); toggleBurstExpanded(burstId); }}
             title="Collapse burst"
           >
-            {frameIndex}/{frameCount}
+            <svg className="burst-stack-icon" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <rect x="0" y="4" width="7" height="5" rx="1" opacity="0.4" />
+              <rect x="1.5" y="2" width="7" height="5" rx="1" opacity="0.7" />
+              <rect x="3" y="0" width="7" height="5" rx="1" opacity="1" />
+            </svg>
+            <span>{frameIndex}/{frameCount}</span>
           </button>
         )}
 

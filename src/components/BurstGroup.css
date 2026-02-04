@@ -112,6 +112,13 @@
   padding: 2px 7px;
   border-radius: 10px;
   line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.burst-stack-icon {
+  flex-shrink: 0;
 }
 
 .burst-count-badge.interactive {
