@@ -126,14 +126,15 @@ function ThumbnailGrid() {
   }
 
   // Row height: image (1:1 square) + overlay text + card chrome + burst stack offset + row gap
-  // Measured: burst stack layers add ~12px below card, selection outline adds ~6px,
-  // card border 4px, row gap 8px, overlay text varies by mode
+  // Components: card border(4), burst stack shadow(14), selection outline(6), row gap(8)
+  // Overlay text: burst cards show 2 lines (filename + burst info) in minimal,
+  //   standard adds exposure, full adds ISO/focal. Singles may show less.
   const imageHeight = thumbnailSize;
   const overlayHeight = overlayMode === 'none' ? 8
-    : overlayMode === 'minimal' ? 44
-    : overlayMode === 'standard' ? 58
-    : 72; // full
-  const ITEM_HEIGHT = imageHeight + overlayHeight + 36; // 36 = card border(4) + burst stack(14) + row gap(8) + selection outline(6) + safety(4)
+    : overlayMode === 'minimal' ? 48
+    : overlayMode === 'standard' ? 64
+    : 80; // full — 3-4 lines of text
+  const ITEM_HEIGHT = imageHeight + overlayHeight + 40; // 40 = generous chrome + stack + gap + outline
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
