@@ -152,6 +152,10 @@
   border-color: rgba(255, 255, 255, 0.06);
 }
 
+.thumb-card.burst-frame.selected {
+  border-color: var(--pl-selected-border);
+}
+
 .burst-frame-badge {
   position: absolute;
   top: var(--pl-space-xs);

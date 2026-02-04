@@ -789,10 +789,15 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       const expanding = !next.has(burstId);
       if (expanding) {
         next.add(burstId);
-        // Select the cover image so cursor moves to the first frame
+        // Select the calculated cover image (first pick → first unflagged → first)
         const burst = state.normalizedBurstGroups.find((b) => b.id === burstId);
         if (burst && burst.imageIds.length > 0) {
-          return { expandedBursts: next, selectedIds: new Set([burst.imageIds[0]]) };
+          const burstImages = burst.imageIds.map((id) => state.imageMap.get(id)).filter(Boolean);
+          const cover = burstImages.find((i) => i!.flag === 'pick')
+            || burstImages.find((i) => i!.flag === 'none')
+            || burstImages[0];
+          const coverId = cover ? cover.id : burst.imageIds[0];
+          return { expandedBursts: next, selectedIds: new Set([coverId]) };
         }
       } else {
         next.delete(burstId);
