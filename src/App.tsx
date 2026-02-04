@@ -13,6 +13,19 @@ import './App.css';
 const GridPanel = (_props: IDockviewPanelProps) => <ThumbnailGrid />;
 const InfoPanel = (_props: IDockviewPanelProps) => <MetadataPanel />;
 
+/** Check if an image passes filters using fresh store state (for post-mutation checks). */
+function passesCurrentFilters(state: ReturnType<typeof useImageStore.getState>, imageId: string): boolean {
+  const img = state.imageMap.get(imageId);
+  if (!img) return false;
+  const f = state.filters;
+  if (img.rating < f.minRating) return false;
+  if (f.flags.size > 0 && !f.flags.has(img.flag)) return false;
+  if (f.colorLabels.size > 0 && !f.colorLabels.has(img.colorLabel)) return false;
+  if (f.showBurstsOnly && !img.burstGroupId) return false;
+  if (f.cameraSerial && img.serialNumber !== f.cameraSerial) return false;
+  return true;
+}
+
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -243,6 +256,44 @@ function App() {
         return burst ? burst.imageIds : null;
       };
 
+      // After a mutation in review mode, advance selection if the image
+      // no longer passes filters (e.g., unpicking a pick in pick-filter view)
+      const advanceIfFiltered = () => {
+        if (!isReviewMode) return;
+        // Check after a microtask so the store has updated
+        setTimeout(() => {
+          const state = useImageStore.getState();
+          const currentSelected = Array.from(state.selectedIds);
+          const droppedIds = currentSelected.filter(
+            (id) => !passesCurrentFilters(state, id)
+          );
+          if (droppedIds.length === 0) return;
+
+          // Find the next visible item after the first dropped ID
+          const droppedIdx = navItems.indexOf(droppedIds[0]);
+          let nextId: string | null = null;
+          // Look forward, then backward for the next item that still passes
+          for (let i = droppedIdx + 1; i < navItems.length; i++) {
+            if (passesCurrentFilters(state, navItems[i])) {
+              nextId = navItems[i];
+              break;
+            }
+          }
+          if (!nextId) {
+            for (let i = droppedIdx - 1; i >= 0; i--) {
+              if (passesCurrentFilters(state, navItems[i])) {
+                nextId = navItems[i];
+                break;
+              }
+            }
+          }
+
+          useImageStore.setState({
+            selectedIds: nextId ? new Set([nextId]) : new Set(),
+          });
+        }, 0);
+      };
+
       const applyFlag = (flag: 'pick' | 'reject') => {
         for (const id of selectedArray) {
           const burstIds = getBurstIds(id);
@@ -254,6 +305,7 @@ function App() {
             setFlag(id, flag);
           }
         }
+        advanceIfFiltered();
       };
 
       switch (e.key.toLowerCase()) {
@@ -275,33 +327,39 @@ function App() {
               setFlag(id, 'none');
             }
           });
+          advanceIfFiltered();
           break;
         case '1': case '2': case '3': case '4': case '5':
           e.preventDefault();
           selectedArray.forEach(id => setRating(id, parseInt(e.key)));
+          advanceIfFiltered();
           break;
         case '6':
           e.preventDefault();
           selectedArray.forEach(id => setColorLabel(id, 'red'));
+          advanceIfFiltered();
           break;
         case '7':
           e.preventDefault();
           selectedArray.forEach(id => setColorLabel(id, 'yellow'));
+          advanceIfFiltered();
           break;
         case '8':
           e.preventDefault();
           selectedArray.forEach(id => setColorLabel(id, 'green'));
+          advanceIfFiltered();
           break;
         case '9':
           e.preventDefault();
           selectedArray.forEach(id => setColorLabel(id, 'blue'));
+          advanceIfFiltered();
           break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups, isReviewMode]);
+  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups, isReviewMode, filters]);
 
   return (
     <div className="app">

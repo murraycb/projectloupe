@@ -4,7 +4,7 @@
  * Uses normalized imageMap for O(1) lookups. Burst navigation uses
  * normalizedBurstGroups[].imageIds for frame ordering.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useImageStore } from '../stores/imageStore';
 import { ImageEntry } from '../types';
 import './LoupeView.css';
@@ -75,6 +75,45 @@ function LoupeView() {
     return counts;
   }, [navigableImages]);
 
+  // In review mode (non-burst loupe), auto-advance when a flag change
+  // removes the current image from the filtered set.
+  const isLoupeReviewMode = !loupe.burstId;
+
+  const advanceLoupeIfFiltered = useCallback(() => {
+    if (!isLoupeReviewMode || !loupe.imageId) return;
+    setTimeout(() => {
+      const state = useImageStore.getState();
+      const img = state.imageMap.get(loupe.imageId!);
+      if (!img) return;
+
+      // Check if image still passes filters
+      const f = state.filters;
+      const passes =
+        img.rating >= f.minRating &&
+        (f.flags.size === 0 || f.flags.has(img.flag)) &&
+        (f.colorLabels.size === 0 || f.colorLabels.has(img.colorLabel)) &&
+        (!f.showBurstsOnly || !!img.burstGroupId) &&
+        (!f.cameraSerial || img.serialNumber === f.cameraSerial);
+
+      if (passes) return; // Still visible, nothing to do
+
+      // Find next navigable image
+      const currentIdx = navigableImages.findIndex((i) => i.id === loupe.imageId);
+      // Look forward then backward (using pre-mutation list since state just changed)
+      let nextImg = navigableImages[currentIdx + 1] || navigableImages[currentIdx - 1];
+
+      if (nextImg) {
+        useImageStore.setState((s) => ({
+          loupe: { ...s.loupe, imageId: nextImg.id },
+          selectedIds: new Set([nextImg.id]),
+        }));
+      } else {
+        // No more images in filtered set — close loupe
+        closeLoupe();
+      }
+    }, 0);
+  }, [isLoupeReviewMode, loupe.imageId, navigableImages, closeLoupe]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -96,48 +135,48 @@ function LoupeView() {
         case 'p':
         case 'P':
           e.preventDefault();
-          if (loupe.imageId) setFlag(loupe.imageId, 'pick');
+          if (loupe.imageId) { setFlag(loupe.imageId, 'pick'); advanceLoupeIfFiltered(); }
           break;
         case 'x':
         case 'X':
           e.preventDefault();
-          if (loupe.imageId) setFlag(loupe.imageId, 'reject');
+          if (loupe.imageId) { setFlag(loupe.imageId, 'reject'); advanceLoupeIfFiltered(); }
           break;
         case 'u':
         case 'U':
           e.preventDefault();
-          if (loupe.imageId) setFlag(loupe.imageId, 'none');
+          if (loupe.imageId) { setFlag(loupe.imageId, 'none'); advanceLoupeIfFiltered(); }
           break;
         case '1': case '2': case '3': case '4': case '5':
           e.preventDefault();
-          if (loupe.imageId) setRating(loupe.imageId, parseInt(e.key));
+          if (loupe.imageId) { setRating(loupe.imageId, parseInt(e.key)); advanceLoupeIfFiltered(); }
           break;
         case '0':
           e.preventDefault();
-          if (loupe.imageId) setRating(loupe.imageId, 0);
+          if (loupe.imageId) { setRating(loupe.imageId, 0); advanceLoupeIfFiltered(); }
           break;
         case '6':
           e.preventDefault();
-          if (loupe.imageId) setColorLabel(loupe.imageId, 'red');
+          if (loupe.imageId) { setColorLabel(loupe.imageId, 'red'); advanceLoupeIfFiltered(); }
           break;
         case '7':
           e.preventDefault();
-          if (loupe.imageId) setColorLabel(loupe.imageId, 'yellow');
+          if (loupe.imageId) { setColorLabel(loupe.imageId, 'yellow'); advanceLoupeIfFiltered(); }
           break;
         case '8':
           e.preventDefault();
-          if (loupe.imageId) setColorLabel(loupe.imageId, 'green');
+          if (loupe.imageId) { setColorLabel(loupe.imageId, 'green'); advanceLoupeIfFiltered(); }
           break;
         case '9':
           e.preventDefault();
-          if (loupe.imageId) setColorLabel(loupe.imageId, 'blue');
+          if (loupe.imageId) { setColorLabel(loupe.imageId, 'blue'); advanceLoupeIfFiltered(); }
           break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [loupe.active, loupe.imageId, closeLoupe, loupeNext, loupePrev, setFlag, setRating, setColorLabel]);
+  }, [loupe.active, loupe.imageId, closeLoupe, loupeNext, loupePrev, setFlag, setRating, setColorLabel, advanceLoupeIfFiltered]);
 
   if (!loupe.active || !currentImage) return null;
 
