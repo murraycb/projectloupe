@@ -1,3 +1,17 @@
+/**
+ * Central state store for ProjectLoupe.
+ *
+ * Architecture: Zustand store with Tauri backend integration.
+ * - Import pipeline: folder dialog → Rust exiftool extraction → burst detection → store hydration
+ * - Thumbnails: two-tier cache (PreviewImage 640px for grid, JpgFromRaw 8K for loupe)
+ * - Loupe: on-demand full-res extraction, pre-fetches entire burst for smooth scrubbing
+ *
+ * Flag/rating mutations update both `images[]` and `burstGroups[].images[]`
+ * to keep burst-level UI (dimming, cover image, flag indicators) in sync.
+ * See `updateImageProp()` helper.
+ *
+ * Interaction pattern: see specs/projectloupe-interaction-patterns.md
+ */
 import { create } from 'zustand';
 import {
   ImageEntry,
@@ -8,14 +22,16 @@ import {
   ImportResult,
   ImagePayload,
   BurstPayload,
+  LoupeState,
 } from '../types';
 
-// Conditional Tauri import
+// Tauri APIs are loaded dynamically — they throw when running in a regular
+// browser (e.g., Vite dev server without Tauri). This lets the frontend code
+// compile and partially work in browser for layout/CSS iteration.
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let openDialog: ((options: Record<string, unknown>) => Promise<string | null>) | null = null;
 let convertFileSrc: ((path: string) => string) | null = null;
 
-// Lazy-load Tauri APIs (they throw outside Tauri runtime)
 async function loadTauriApis() {
   try {
     const tauri = await import('@tauri-apps/api/core');
@@ -41,6 +57,7 @@ interface ImageStore {
   isImporting: boolean;
   importError: string | null;
   folderPath: string | null;
+  loupe: LoupeState;
 
   // Actions — image metadata
   setRating: (imageId: string, rating: number) => void;
@@ -63,6 +80,12 @@ interface ImageStore {
   importFolder: () => Promise<void>;
   importPath: (folderPath: string) => Promise<void>;
   extractThumbnails: () => Promise<void>;
+
+  // Actions — loupe
+  openLoupe: (imageId: string) => void;
+  closeLoupe: () => void;
+  loupeNext: () => void;
+  loupePrev: () => void;
 
   // Actions — display
   cycleOverlayMode: () => void;
@@ -120,6 +143,32 @@ function burstPayloadToGroup(burst: BurstPayload): { group: BurstGroupData; entr
   return { group, entries };
 }
 
+/**
+ * Update a property on an image in BOTH `images[]` and `burstGroups[].images[]`.
+ *
+ * Why dual update? The store maintains two collections: a flat `images[]` array
+ * (used for filtering, sorting, global operations) and `burstGroups[].images[]`
+ * (used by BurstGroup components for burst-level state like "all rejected" dimming
+ * and cover image selection). Without syncing both, flag changes in the loupe
+ * wouldn't reflect in the grid's burst stacks.
+ */
+function updateImageProp(
+  state: Pick<ImageStore, 'images' | 'burstGroups'>,
+  imageId: string,
+  patch: Partial<ImageEntry>,
+) {
+  const updateImg = (img: ImageEntry) =>
+    img.id === imageId ? { ...img, ...patch } : img;
+
+  return {
+    images: state.images.map(updateImg),
+    burstGroups: state.burstGroups.map((burst) => ({
+      ...burst,
+      images: burst.images.map(updateImg),
+    })),
+  };
+}
+
 export const useImageStore = create<ImageStore>((set, get) => ({
   images: [],
   burstGroups: [],
@@ -130,6 +179,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   isImporting: false,
   importError: null,
   folderPath: null,
+  loupe: { active: false, imageId: null, burstId: null, loupeUrls: {} },
   filters: {
     minRating: 0,
     flags: new Set(),
@@ -139,27 +189,20 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   setRating: (imageId, rating) => {
-    set((state) => ({
-      images: state.images.map((img) =>
-        img.id === imageId ? { ...img, rating } : img
-      ),
-    }));
+    set((state) => updateImageProp(state, imageId, { rating }));
   },
 
   setFlag: (imageId, flag) => {
-    set((state) => ({
-      images: state.images.map((img) =>
-        img.id === imageId ? { ...img, flag } : img
-      ),
-    }));
+    // Toggle behavior: P on a pick → unflag, X on a reject → unflag.
+    // This reduces keystrokes — photographer doesn't need a separate undo key
+    // for quick corrections. U is still available as explicit unflag.
+    const current = get().images.find((img) => img.id === imageId);
+    const newFlag = current && current.flag === flag ? 'none' : flag;
+    set((state) => updateImageProp(state, imageId, { flag: newFlag }));
   },
 
   setColorLabel: (imageId, label) => {
-    set((state) => ({
-      images: state.images.map((img) =>
-        img.id === imageId ? { ...img, colorLabel: label } : img
-      ),
-    }));
+    set((state) => updateImageProp(state, imageId, { colorLabel: label }));
   },
 
   toggleSelection: (imageId) => {
@@ -279,6 +322,9 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         burstCount: c.burst_count,
       }));
 
+      // Auto-select first image
+      const firstId = allImages.length > 0 ? allImages[0].id : null;
+
       set({
         images: allImages,
         burstGroups,
@@ -286,7 +332,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         folderPath,
         isImporting: false,
         importError: null,
-        selectedIds: new Set(),
+        selectedIds: firstId ? new Set([firstId]) : new Set(),
         expandedBursts: new Set(),
       });
 
@@ -344,6 +390,8 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         burstCount: c.burst_count,
       }));
 
+      const firstId = allImages.length > 0 ? allImages[0].id : null;
+
       set({
         images: allImages,
         burstGroups,
@@ -351,7 +399,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         folderPath,
         isImporting: false,
         importError: null,
-        selectedIds: new Set(),
+        selectedIds: firstId ? new Set([firstId]) : new Set(),
         expandedBursts: new Set(),
       });
 
@@ -361,6 +409,134 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       console.error('Import error:', err);
       const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || 'Unknown error');
       set({ isImporting: false, importError: errorMsg });
+    }
+  },
+
+  openLoupe: (imageId: string) => {
+    const { images, burstGroups } = get();
+    const image = images.find((img) => img.id === imageId);
+    if (!image) return;
+
+    // Determine if this image is in a burst
+    const burstId = image.burstGroupId || null;
+
+    // Smart start frame: open loupe on the most useful image in the burst.
+    // First pick (resume where you left off) > first unflagged (next to review) > first frame.
+    let startId = imageId;
+    if (burstId) {
+      const burst = burstGroups.find((b) => b.id === burstId);
+      if (burst) {
+        const firstPick = burst.images.find((img) => img.flag === 'pick');
+        if (firstPick) {
+          startId = firstPick.id;
+        } else {
+          const firstUnflagged = burst.images.find((img) => img.flag === 'none');
+          if (firstUnflagged) startId = firstUnflagged.id;
+        }
+      }
+    }
+
+    set({
+      loupe: { active: true, imageId: startId, burstId, loupeUrls: get().loupe.loupeUrls },
+      selectedIds: new Set([startId]),
+    });
+
+    // Pre-fetch full-res images for the burst (or just this image)
+    (async () => {
+      if (!invoke) await loadTauriApis();
+      if (!invoke || !convertFileSrc) return;
+
+      try {
+        let pathsToFetch: string[];
+        if (burstId) {
+          const burst = burstGroups.find((b) => b.id === burstId);
+          pathsToFetch = burst ? burst.images.map((img) => img.path) : [image.path];
+        } else {
+          pathsToFetch = [image.path];
+        }
+
+        const loupeMap = await invoke('extract_burst_loupe_images', {
+          filePaths: pathsToFetch,
+        }) as Record<string, string>;
+
+        // Convert file paths to asset URLs
+        const loupeUrls: Record<string, string> = {};
+        for (const [filePath, cachePath] of Object.entries(loupeMap)) {
+          loupeUrls[filePath] = convertFileSrc!(cachePath);
+        }
+
+        set((state) => ({
+          loupe: { ...state.loupe, loupeUrls: { ...state.loupe.loupeUrls, ...loupeUrls } },
+        }));
+      } catch (err) {
+        console.error('Failed to extract loupe images:', err);
+      }
+    })();
+  },
+
+  closeLoupe: () => {
+    const { loupe, burstGroups } = get();
+    if (!loupe.active) return;
+
+    // Keep selection on the burst/image we were viewing
+    let selectionId: string | null = null;
+    if (loupe.burstId) {
+      // Select the first image of the burst (the stack cover)
+      const burst = burstGroups.find((b) => b.id === loupe.burstId);
+      if (burst && burst.images.length > 0) {
+        selectionId = burst.images[0].id;
+      }
+    } else {
+      selectionId = loupe.imageId;
+    }
+
+    set({
+      loupe: { ...get().loupe, active: false, imageId: null, burstId: null },
+      selectedIds: selectionId ? new Set([selectionId]) : new Set(),
+    });
+  },
+
+  loupeNext: () => {
+    const { loupe, images, burstGroups } = get();
+    if (!loupe.active || !loupe.imageId) return;
+
+    let navigableImages: ImageEntry[];
+    if (loupe.burstId) {
+      const burst = burstGroups.find((b) => b.id === loupe.burstId);
+      navigableImages = burst ? burst.images : [];
+    } else {
+      navigableImages = images;
+    }
+
+    const currentIdx = navigableImages.findIndex((img) => img.id === loupe.imageId);
+    if (currentIdx < navigableImages.length - 1) {
+      const nextImage = navigableImages[currentIdx + 1];
+      set({
+        loupe: { ...loupe, imageId: nextImage.id },
+        selectedIds: new Set([nextImage.id]),
+      });
+    }
+  },
+
+  loupePrev: () => {
+    const { loupe, images, burstGroups } = get();
+    if (!loupe.active || !loupe.imageId) return;
+
+    let navigableImages: ImageEntry[];
+    if (loupe.burstId) {
+      const burst = burstGroups.find((b) => b.id === loupe.burstId);
+      navigableImages = burst ? burst.images : [];
+    } else {
+      navigableImages = images;
+    }
+
+    const currentIdx = navigableImages.findIndex((img) => img.id === loupe.imageId);
+    if (currentIdx > 0) {
+      const prevImage = navigableImages[currentIdx - 1];
+      set({
+        loupe: { ...loupe, imageId: prevImage.id },
+        selectedIds: new Set([prevImage.id]),
+      });
     }
   },
 

@@ -1,7 +1,16 @@
-//! EXIF data extraction using exiftool for ProjectLoupe
-//! 
-//! This module provides efficient EXIF metadata extraction using exiftool's
-//! stay-open mode for high performance batch processing.
+//! EXIF extraction via exiftool's `-stay_open` persistent process.
+//!
+//! Why exiftool over pure Rust crates (kamadak-exif, exif-oxide)?
+//! exiftool has 25+ years of maker note parsing across every camera brand.
+//! We need maker notes for Nikon's BurstGroupID, ShootingMode, HighFrameRate,
+//! and similar proprietary tags that no Rust crate currently handles.
+//!
+//! The `-stay_open` mode keeps a single exiftool process alive across multiple
+//! queries, avoiding the ~100ms startup cost per invocation. For 500 files this
+//! cuts extraction from ~50s (cold start each) to ~5s (one warm process).
+//!
+//! We use `-fast` (not `-fast2`) because `-fast2` skips maker notes entirely,
+//! which would lose BurstGroupID — our primary burst detection signal.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio, Child};
@@ -25,9 +34,18 @@ impl DriveMode {
     }
 }
 
+/// Normalized EXIF metadata for a single image file.
+///
+/// This is the clean output after parsing exiftool's JSON — all brand-specific
+/// quirks (Nikon integers vs Canon strings for serial numbers, varying ISO
+/// formats, etc.) are resolved here into consistent types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExifData {
+    /// Camera serial number — used to partition images by camera body.
+    /// Falls back to InternalSerialNumber, then Make_Model if unavailable.
     pub serial_number: String,
+    /// Drive mode at time of capture — primary signal for burst detection
+    /// when native BurstGroupID is unavailable.
     pub drive_mode: DriveMode,
     pub capture_time: DateTime<Utc>,
     pub make: Option<String>,
@@ -38,9 +56,10 @@ pub struct ExifData {
     pub shutter_speed: Option<String>,
     pub iso: Option<u32>,
     pub file_path: PathBuf,
-    /// Camera-native burst group ID (e.g., Nikon BurstGroupID)
+    /// Camera-native burst group ID (e.g., Nikon Z9 BurstGroupID from maker notes).
+    /// When present, this is ground truth — no heuristics needed.
     pub burst_group_id: Option<u64>,
-    /// High frame rate mode (e.g., "CH", "CL", "Off")
+    /// High frame rate mode tag (e.g., "CH" = continuous high, "CL" = continuous low).
     pub high_frame_rate: Option<String>,
 }
 
@@ -65,7 +84,12 @@ impl ExifData {
     }
 }
 
-/// Deserialize a value that could be a string or number into Option<String>
+/// Flexible deserializer for EXIF fields that exiftool returns as inconsistent types.
+///
+/// exiftool's JSON output varies by camera brand: Nikon SerialNumber comes as
+/// an integer (3002851), Canon as a string ("032012345"). Aperture might be
+/// a number (4.0) or a string ("4.0"). This visitor accepts any scalar type
+/// and normalizes to Option<String>.
 fn deserialize_string_or_number<'de, D>(deserializer: D) -> std::result::Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -112,6 +136,9 @@ where
     deserializer.deserialize_any(StringOrNumber)
 }
 
+/// Raw deserialization target for exiftool's JSON output.
+/// Field names match exiftool's tag names (PascalCase via serde rename).
+/// This is an intermediate representation — ExifData is the clean public type.
 #[derive(Deserialize)]
 struct ExiftoolOutput {
     #[serde(rename = "SerialNumber", deserialize_with = "deserialize_string_or_number", default)]

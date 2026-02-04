@@ -1,7 +1,18 @@
-//! Burst detection and grouping for ProjectLoupe
-//! 
-//! This module implements burst detection based on camera serial number partitioning
-//! and EXIF drive mode analysis for accurate burst identification.
+//! Burst detection: groups continuous-shooting sequences from EXIF metadata.
+//!
+//! Two-strategy hierarchy:
+//! 1. **Native BurstGroupID** (primary) — Nikon Z cameras tag each burst with a
+//!    unique ID in maker notes. This is ground truth; no heuristics needed.
+//! 2. **Drive mode inference** (fallback) — for cameras without native burst IDs,
+//!    groups consecutive images shot in continuous drive mode (CL/CH) with
+//!    sub-threshold time gaps.
+//!
+//! Images are partitioned by camera serial number first — clock sync between
+//! camera bodies is irrelevant for burst detection. A 2-body sports shoot
+//! processes each body independently.
+//!
+//! FPS is calculated as (frame_count - 1) / duration, since N frames produce
+//! N-1 intervals.
 
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,16 @@
+/**
+ * Type definitions for ProjectLoupe.
+ *
+ * Two layers of types:
+ * 1. Backend payloads (snake_case) — match Rust serde serialization from Tauri commands.
+ *    These are the raw JSON shapes returned by invoke().
+ * 2. Frontend types (camelCase) — used by React components and the Zustand store.
+ *    Converted from payloads in imageStore.ts via payloadToEntry()/burstPayloadToGroup().
+ *
+ * This separation keeps the Rust↔TS contract explicit and insulates the UI from
+ * backend serialization changes.
+ */
+
 // -- Backend payload types (from Tauri commands) --
 
 export interface ImagePayload {
@@ -107,3 +120,11 @@ export type FilterState = {
 };
 
 export type OverlayMode = 'none' | 'minimal' | 'standard' | 'full';
+
+// Loupe view state
+export interface LoupeState {
+  active: boolean;
+  imageId: string | null;         // current image being viewed
+  burstId: string | null;         // if viewing a burst, the burst ID (locks navigation to burst)
+  loupeUrls: Record<string, string>;  // file path → asset URL for full-res images
+}

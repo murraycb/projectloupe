@@ -7,7 +7,7 @@ interface ThumbnailCardProps {
 }
 
 function ThumbnailCard({ image }: ThumbnailCardProps) {
-  const { selectedIds, toggleSelection, overlayMode } = useImageStore();
+  const { selectedIds, toggleSelection, overlayMode, openLoupe } = useImageStore();
   const isSelected = selectedIds.has(image.id);
 
   const hue = image._placeholderHue || 0;
@@ -18,10 +18,16 @@ function ThumbnailCard({ image }: ThumbnailCardProps) {
     toggleSelection(image.id);
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openLoupe(image.id);
+  };
+
   return (
     <div
       className={`thumb-card ${isSelected ? 'selected' : ''} ${image.flag !== 'none' ? image.flag : ''}`}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
       <div className="thumb-image">
         {image.thumbnailUrl ? (

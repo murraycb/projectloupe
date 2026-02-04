@@ -1,3 +1,20 @@
+//! ProjectLoupe Tauri backend — bridges the Rust burst-detection crate to the React frontend.
+//!
+//! Command architecture:
+//! - `import_folder`: Scan → exiftool EXIF extraction → burst detection → structured JSON response
+//! - `extract_thumbnails`: Batch extract PreviewImage (640px) for grid thumbnails
+//! - `extract_loupe_image` / `extract_burst_loupe_images`: On-demand JpgFromRaw (8K) for loupe view
+//!
+//! Thumbnail strategy (two-tier):
+//! - Grid: PreviewImage (~150KB, 640px) — extracted in bulk after import, ~1.3s for 73 files
+//! - Loupe: JpgFromRaw (~3.5MB, 8256×5504) — extracted on-demand when loupe opens, cached
+//!
+//! Both tiers cache to ~/.projectloupe/cache/{thumbnails,loupe}/ and are served to the
+//! frontend via Tauri's asset:// protocol (convertFileSrc).
+//!
+//! State management: AppState holds a persistent exiftool process (Mutex<Option<ExiftoolRunner>>)
+//! to avoid respawning for each command. The last BurstResult is cached for the analysis endpoint.
+
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -291,6 +308,122 @@ async fn get_thumbnail(
     Ok(cache.get(&file_path).cloned())
 }
 
+/// Extract the full-resolution embedded JPEG (JpgFromRaw) for loupe view.
+/// On-demand: only extracts when requested, caches for subsequent views.
+/// Returns the path to the cached full-res JPEG.
+#[command]
+async fn extract_loupe_image(
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let source = PathBuf::from(&file_path);
+    if !source.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+
+    let stem = source.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+
+    let loupe_dir = state.cache_dir.join("loupe");
+    std::fs::create_dir_all(&loupe_dir)
+        .map_err(|e| format!("Failed to create loupe cache dir: {}", e))?;
+
+    let loupe_path = loupe_dir.join(format!("{}.jpg", stem));
+
+    // Return cached if already extracted
+    if loupe_path.exists() {
+        return Ok(loupe_path.display().to_string());
+    }
+
+    // Extract JpgFromRaw (full-res embedded JPEG) via exiftool
+    let output = std::process::Command::new("exiftool")
+        .arg("-b")
+        .arg("-JpgFromRaw")
+        .arg(&source)
+        .output()
+        .map_err(|e| format!("Failed to run exiftool: {}", e))?;
+
+    if output.stdout.is_empty() {
+        // Fallback to PreviewImage if JpgFromRaw not available
+        let output2 = std::process::Command::new("exiftool")
+            .arg("-b")
+            .arg("-PreviewImage")
+            .arg(&source)
+            .output()
+            .map_err(|e| format!("Failed to run exiftool fallback: {}", e))?;
+
+        if output2.stdout.is_empty() {
+            return Err("No embedded JPEG found in file".to_string());
+        }
+
+        std::fs::write(&loupe_path, &output2.stdout)
+            .map_err(|e| format!("Failed to write loupe image: {}", e))?;
+    } else {
+        std::fs::write(&loupe_path, &output.stdout)
+            .map_err(|e| format!("Failed to write loupe image: {}", e))?;
+    }
+
+    Ok(loupe_path.display().to_string())
+}
+
+/// Batch extract loupe images for a burst (pre-fetch for smooth scrubbing)
+#[command]
+async fn extract_burst_loupe_images(
+    file_paths: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, String>, String> {
+    let loupe_dir = state.cache_dir.join("loupe");
+    std::fs::create_dir_all(&loupe_dir)
+        .map_err(|e| format!("Failed to create loupe cache dir: {}", e))?;
+
+    // Collect paths that need extraction
+    let mut to_extract: Vec<PathBuf> = Vec::new();
+    let mut result_map: HashMap<String, String> = HashMap::new();
+
+    for fp in &file_paths {
+        let source = PathBuf::from(fp);
+        let stem = source.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        let loupe_path = loupe_dir.join(format!("{}.jpg", stem));
+
+        if loupe_path.exists() {
+            result_map.insert(fp.clone(), loupe_path.display().to_string());
+        } else {
+            to_extract.push(source);
+        }
+    }
+
+    if !to_extract.is_empty() {
+        // Batch extract via exiftool -w
+        let mut cmd = std::process::Command::new("exiftool");
+        cmd.arg("-b")
+           .arg("-JpgFromRaw")
+           .arg("-w")
+           .arg(format!("{}/%f.jpg", loupe_dir.display()));
+
+        for path in &to_extract {
+            cmd.arg(path.as_os_str());
+        }
+
+        let _ = cmd.output();
+
+        // Map results
+        for path in &to_extract {
+            let stem = path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
+            let loupe_path = loupe_dir.join(format!("{}.jpg", stem));
+            if loupe_path.exists() {
+                result_map.insert(path.display().to_string(), loupe_path.display().to_string());
+            }
+        }
+    }
+
+    Ok(result_map)
+}
+
 #[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -345,6 +478,8 @@ fn main() {
             get_analysis,
             extract_thumbnails,
             get_thumbnail,
+            extract_loupe_image,
+            extract_burst_loupe_images,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

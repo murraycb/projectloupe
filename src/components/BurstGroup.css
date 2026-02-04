@@ -10,6 +10,37 @@
   transform: translateY(-1px);
 }
 
+.burst-group.collapsed.selected .image-placeholder {
+  outline: 2px solid var(--pl-selected-border, #5e6ad2);
+  outline-offset: 1px;
+}
+
+.burst-group.collapsed.all-rejected {
+  opacity: 0.35;
+}
+
+.burst-group.collapsed.all-rejected:hover {
+  opacity: 0.55;
+}
+
+.burst-flag-pick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-left: 20px solid #4ade80;
+  border-bottom: 20px solid transparent;
+  z-index: 1;
+}
+
+.burst-flag-reject {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-left: 20px solid #ef4444;
+  border-bottom: 20px solid transparent;
+  z-index: 1;
+}
+
 .burst-card {
   position: relative;
 }

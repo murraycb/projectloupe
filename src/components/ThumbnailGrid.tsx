@@ -16,7 +16,7 @@ type DisplayItem = {
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { images, burstGroups, cameras, filters, expandedBursts } = useImageStore();
+  const { images, burstGroups, cameras, filters } = useImageStore();
 
   // Responsive column count
   useEffect(() => {
@@ -76,7 +76,7 @@ function ThumbnailGrid() {
     }
 
     return items;
-  }, [filteredImages, expandedBursts, cameras, burstGroups]);
+  }, [filteredImages, cameras, burstGroups]);
 
   function addImagesAsItems(
     imageList: ImageEntry[],
@@ -87,26 +87,11 @@ function ThumbnailGrid() {
       if (image.burstGroupId && !processedBursts.has(image.burstGroupId)) {
         const burst = burstGroups.find((b) => b.id === image.burstGroupId);
         if (burst) {
-          const isExpanded = expandedBursts.has(burst.id);
-
-          if (isExpanded) {
-            // Filter burst images through current filters
-            const filteredBurstImages = burst.images.filter((img) => {
-              if (img.rating < filters.minRating) return false;
-              if (filters.flags.size > 0 && !filters.flags.has(img.flag)) return false;
-              if (filters.colorLabels.size > 0 && !filters.colorLabels.has(img.colorLabel)) return false;
-              return true;
-            });
-            filteredBurstImages.forEach((img) => {
-              items.push({ type: 'image', data: img, id: img.id });
-            });
-          } else {
-            items.push({
-              type: 'burst',
-              data: { ...burst, expanded: false },
-              id: burst.id,
-            });
-          }
+          items.push({
+            type: 'burst',
+            data: { ...burst, expanded: false },
+            id: burst.id,
+          });
         }
         processedBursts.add(image.burstGroupId);
       } else if (!image.burstGroupId) {
