@@ -16,7 +16,7 @@ type DisplayItem =
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, expandedBursts } = useImageStore();
+  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, expandedBursts, overlayMode } = useImageStore();
 
   // Responsive column count — derived from thumbnailSize
   const cellWidth = thumbnailSize + 16; // thumbnail + gap/padding
@@ -125,8 +125,13 @@ function ThumbnailGrid() {
     }
   }
 
-  // Scale row height proportionally with thumbnail size
-  const ITEM_HEIGHT = Math.round(thumbnailSize * 1.25);
+  // Row height: image (3:2 aspect) + overlay text + padding + burst stack offset
+  const imageHeight = Math.round(thumbnailSize * (2 / 3));
+  const overlayHeight = overlayMode === 'none' ? 0
+    : overlayMode === 'minimal' ? 36
+    : overlayMode === 'standard' ? 50
+    : 64; // full
+  const ITEM_HEIGHT = imageHeight + overlayHeight + 20; // 20 = card border + row gap + burst stack offset
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
@@ -152,7 +157,7 @@ function ThumbnailGrid() {
       result.push({ items: currentRow, height: ITEM_HEIGHT });
     }
     return result;
-  }, [displayItems, columns]);
+  }, [displayItems, columns, ITEM_HEIGHT]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
