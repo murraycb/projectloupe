@@ -10,6 +10,7 @@ if (import.meta.env.DEV) {
     store: () => useImageStore.getState(),
     importPath: (path: string) => useImageStore.getState().importPath(path),
     importFolder: () => useImageStore.getState().importFolder(),
+    importJson: (url?: string) => useImageStore.getState().importFromJson(url || '/import-payload.json'),
   };
 
   // Auto-import from URL param: ?folder=/path/to/files

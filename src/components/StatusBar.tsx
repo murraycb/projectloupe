@@ -8,30 +8,34 @@ interface StatusBarProps {
 }
 
 function StatusBar({ theme, onToggleTheme }: StatusBarProps) {
-  const { images, selectedIds, filters, overlayMode } = useImageStore();
+  const { imageMap, normalizedBurstGroups, selectedIds, filters, overlayMode } = useImageStore();
 
   const stats = useMemo(() => {
-    const total = images.length;
-    const picks = images.filter(i => i.flag === 'pick').length;
-    const rejects = images.filter(i => i.flag === 'reject').length;
-    const rated = images.filter(i => i.rating > 0).length;
-    const bursts = new Set(images.filter(i => i.burstGroupId).map(i => i.burstGroupId)).size;
+    const total = imageMap.size;
+    let picks = 0, rejects = 0, rated = 0, filtered = 0;
 
-    const filtered = images.filter(image => {
-      if (image.rating < filters.minRating) return false;
-      if (filters.flags.size > 0 && !filters.flags.has(image.flag)) return false;
-      if (filters.colorLabels.size > 0 && !filters.colorLabels.has(image.colorLabel)) return false;
-      if (filters.showBurstsOnly && !image.burstGroupId) return false;
-      return true;
-    }).length;
+    for (const [, img] of imageMap) {
+      if (img.flag === 'pick') picks++;
+      if (img.flag === 'reject') rejects++;
+      if (img.rating > 0) rated++;
 
+      // Check if passes current filters
+      if (img.rating >= filters.minRating &&
+          (filters.flags.size === 0 || filters.flags.has(img.flag)) &&
+          (filters.colorLabels.size === 0 || filters.colorLabels.has(img.colorLabel)) &&
+          (!filters.showBurstsOnly || img.burstGroupId)) {
+        filtered++;
+      }
+    }
+
+    const bursts = normalizedBurstGroups.length;
     return { total, filtered, picks, rejects, rated, bursts };
-  }, [images, filters]);
+  }, [imageMap, normalizedBurstGroups, filters]);
 
   return (
     <div className="status-bar">
       <div className="status-left">
-        {images.length > 0 ? (
+        {imageMap.size > 0 ? (
           <>
             <span className="status-item">
               {stats.filtered === stats.total

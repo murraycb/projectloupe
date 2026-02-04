@@ -10,7 +10,6 @@ import CommandPalette from './components/CommandPalette';
 import LoupeView from './components/LoupeView';
 import './App.css';
 
-// Dockview panel wrappers
 const GridPanel = (_props: IDockviewPanelProps) => <ThumbnailGrid />;
 const InfoPanel = (_props: IDockviewPanelProps) => <MetadataPanel />;
 
@@ -20,53 +19,55 @@ function App() {
   const dockviewRef = useRef<any>(null);
 
   const {
-    images,
-    burstGroups,
+    imageMap,
+    imageOrder,
+    normalizedBurstGroups,
+    burstIndex,
+    cameras,
     setRating,
     setFlag,
     setColorLabel,
-    toggleBurstExpand,
     selectedIds,
-    expandedBursts,
     clearSelection,
     cycleOverlayMode,
     loupe,
     openLoupe,
   } = useImageStore();
 
-  // Build navigable item list grouped by camera section
-  // Each camera section starts a new row, so up/down needs to account for this
+  // Build navigable item list — bursts as single nav items.
+  // Only depends on imageOrder + burstIndex (not on flag state),
+  // so this doesn't recompute when flags change.
   const { navItems, navRows } = useMemo(() => {
     const items: string[] = [];
-    const rows: string[][] = []; // rows of image IDs as laid out visually
-
-    // Group images by camera serial (in order they appear)
+    const rows: string[][] = [];
     const byCamera = new Map<string, string[]>();
     const processedBursts = new Set<string>();
 
-    for (const img of images) {
+    for (const id of imageOrder) {
+      const img = imageMap.get(id);
+      if (!img) continue;
       const serial = img.serialNumber;
       if (!byCamera.has(serial)) byCamera.set(serial, []);
       const list = byCamera.get(serial)!;
 
-      if (img.burstGroupId) {
-        if (!processedBursts.has(img.burstGroupId)) {
-          processedBursts.add(img.burstGroupId);
-          const burst = burstGroups.find((b) => b.id === img.burstGroupId);
-          if (burst && burst.images.length > 0) {
-            list.push(burst.images[0].id);
+      const burstId = burstIndex.get(id);
+      if (burstId) {
+        if (!processedBursts.has(burstId)) {
+          processedBursts.add(burstId);
+          const burst = normalizedBurstGroups.find((b) => b.id === burstId);
+          if (burst && burst.imageIds.length > 0) {
+            list.push(burst.imageIds[0]);
           }
         }
       } else {
-        list.push(img.id);
+        list.push(id);
       }
     }
 
-    // Estimate column count
+    // Column count from grid element
     const gridEl = document.querySelector('.thumbnail-grid');
     const cols = gridEl ? Math.max(2, Math.floor(gridEl.clientWidth / 216)) : 5;
 
-    // Build rows per camera section
     for (const [, sectionItems] of byCamera) {
       let currentRow: string[] = [];
       for (const id of sectionItems) {
@@ -83,7 +84,7 @@ function App() {
     }
 
     return { navItems: items, navRows: rows };
-  }, [images, burstGroups]);
+  }, [imageOrder, burstIndex, normalizedBurstGroups, imageMap, cameras]);
 
   // Theme
   useEffect(() => {
@@ -115,11 +116,8 @@ function App() {
 
   const components = { grid: GridPanel, info: InfoPanel };
 
-  // Keyboard shortcuts
-  // Grid-level keyboard shortcuts.
-  // Loupe has its own handler (LoupeView.tsx) — when loupe is active, grid shortcuts
-  // bail early to avoid conflicts. This layered approach means the same keys (P/X/U)
-  // work in both contexts with different scope (see interaction-patterns.md).
+  // Grid keyboard shortcuts.
+  // Loupe has its own handler — bail early when loupe is active.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -138,7 +136,6 @@ function App() {
         return;
       }
 
-      // Don't process grid shortcuts when loupe is active (it handles its own)
       if (loupe.active) return;
 
       // J — cycle overlay mode
@@ -148,7 +145,6 @@ function App() {
         return;
       }
 
-      // Don't process shortcuts below if command palette is open
       if (showCommandPalette) return;
 
       const selectedArray = Array.from(selectedIds);
@@ -166,11 +162,12 @@ function App() {
         const currentId = selectedArray.length === 1 ? selectedArray[0] : null;
         let currentIdx = currentId ? navItems.indexOf(currentId) : -1;
         if (currentIdx === -1 && currentId) {
-          const img = images.find((i) => i.id === currentId);
-          if (img?.burstGroupId) {
-            const burst = burstGroups.find((b) => b.id === img.burstGroupId);
-            if (burst && burst.images.length > 0) {
-              currentIdx = navItems.indexOf(burst.images[0].id);
+          // If selected image is inside a burst, find the burst's first image
+          const bId = burstIndex.get(currentId);
+          if (bId) {
+            const burst = normalizedBurstGroups.find((b) => b.id === bId);
+            if (burst && burst.imageIds.length > 0) {
+              currentIdx = navItems.indexOf(burst.imageIds[0]);
             }
           }
         }
@@ -182,7 +179,6 @@ function App() {
         } else if (e.key === 'ArrowLeft') {
           nextId = navItems[Math.max(currentIdx - 1, 0)];
         } else {
-          // Up/Down — find current row/col and jump to same col in adjacent row
           let rowIdx = -1, colIdx = -1;
           for (let r = 0; r < navRows.length; r++) {
             const c = navRows[r].indexOf(navItems[currentIdx]);
@@ -196,7 +192,6 @@ function App() {
             const targetCol = Math.min(colIdx, navRows[targetRow].length - 1);
             nextId = navRows[targetRow][targetCol];
           } else {
-            // ArrowUp
             const targetRow = Math.max(rowIdx - 1, 0);
             const targetCol = Math.min(colIdx, navRows[targetRow].length - 1);
             nextId = navRows[targetRow][targetCol];
@@ -207,7 +202,7 @@ function App() {
         return;
       }
 
-      // Enter — open loupe for selected image
+      // Enter — open loupe
       if (e.key === 'Enter' && selectedArray.length === 1) {
         e.preventDefault();
         openLoupe(selectedArray[0]);
@@ -216,27 +211,19 @@ function App() {
 
       if (selectedArray.length === 0) return;
 
-      // Burst-aware flagging: when a burst is selected in the grid, P/X applies to ALL
-      // frames in the burst (not just the cover image). This lets a photographer reject
-      // an entire 25-frame burst in one keystroke. Toggle triggers only when all frames
-      // already share the same flag — prevents accidental unflag on partially-culled bursts.
+      // Burst-aware flagging helper
       const getBurstIds = (id: string): string[] | null => {
-        const img = images.find((i) => i.id === id);
-        if (!img?.burstGroupId) return null;
-        const burst = burstGroups.find((b) => b.id === img.burstGroupId);
-        return burst ? burst.images.map((i) => i.id) : null;
+        const bId = burstIndex.get(id);
+        if (!bId) return null;
+        const burst = normalizedBurstGroups.find((b) => b.id === bId);
+        return burst ? burst.imageIds : null;
       };
 
-      // Helper: apply flag to burst (bulk toggle) or single image
       const applyFlag = (flag: 'pick' | 'reject') => {
         for (const id of selectedArray) {
           const burstIds = getBurstIds(id);
           if (burstIds) {
-            // Check if all burst images already have this flag
-            const allSame = burstIds.every((bid) => {
-              const img = images.find((i) => i.id === bid);
-              return img?.flag === flag;
-            });
+            const allSame = burstIds.every((bid) => imageMap.get(bid)?.flag === flag);
             const targetFlag = allSame ? 'none' : flag;
             burstIds.forEach((bid) => setFlag(bid, targetFlag));
           } else {
@@ -290,13 +277,13 @@ function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setRating, setFlag, setColorLabel, selectedIds, expandedBursts, toggleBurstExpand, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, images, burstGroups]);
+  }, [setRating, setFlag, setColorLabel, selectedIds, showCommandPalette, toggleTheme, cycleOverlayMode, loupe.active, openLoupe, clearSelection, navItems, navRows, imageMap, burstIndex, normalizedBurstGroups]);
 
   return (
     <div className="app">
       <FilterBar />
       <div className="main-content">
-        {images.length === 0 ? (
+        {imageMap.size === 0 ? (
           <>
             <ThumbnailGrid />
             <MetadataPanel />

@@ -92,6 +92,11 @@ export interface ImageEntry {
   _placeholderBrightness?: number;
 }
 
+/**
+ * Burst group with embedded image copies.
+ * @deprecated Use NormalizedBurstGroup with imageIds instead.
+ * Kept temporarily during incremental migration.
+ */
 export interface BurstGroupData {
   id: string;
   cameraSerial: string;
@@ -101,6 +106,17 @@ export interface BurstGroupData {
   avgGapMs: number;
   estimatedFps: number;
   expanded: boolean;
+}
+
+/** Normalized burst group — references images by ID instead of embedding copies. */
+export interface NormalizedBurstGroup {
+  id: string;
+  cameraSerial: string;
+  imageIds: string[];
+  frameCount: number;
+  durationMs: number;
+  avgGapMs: number;
+  estimatedFps: number;
 }
 
 export interface CameraGroup {

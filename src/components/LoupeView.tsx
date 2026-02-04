@@ -1,18 +1,8 @@
 /**
  * Full-screen loupe view for detailed image inspection.
  *
- * Renders as a fixed overlay on top of the grid. When opened on a burst,
- * navigation (←→) is locked to that burst's frames, with a filmstrip at the
- * bottom showing all frames and their flag state.
- *
- * Image loading is two-phase: the grid thumbnail (640px) shows immediately
- * (with a subtle blur to signal it's not final), then the full-res embedded
- * JPEG (8K JpgFromRaw) swaps in once extracted. Extraction is on-demand and
- * cached to ~/.projectloupe/cache/loupe/.
- *
- * Keyboard shortcuts (P/X/U, 1-5, 6-9) are handled here independently from
- * the grid's handler — the loupe intercepts keys when active so grid shortcuts
- * don't fire underneath.
+ * Uses normalized imageMap for O(1) lookups. Burst navigation uses
+ * normalizedBurstGroups[].imageIds for frame ordering.
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useImageStore } from '../stores/imageStore';
@@ -22,8 +12,9 @@ import './LoupeView.css';
 function LoupeView() {
   const {
     loupe,
-    images,
-    burstGroups,
+    imageMap,
+    imageOrder,
+    normalizedBurstGroups,
     closeLoupe,
     loupeNext,
     loupePrev,
@@ -33,18 +24,20 @@ function LoupeView() {
   } = useImageStore();
 
   const currentImage = useMemo(
-    () => images.find((img) => img.id === loupe.imageId) || null,
-    [images, loupe.imageId]
+    () => (loupe.imageId ? imageMap.get(loupe.imageId) ?? null : null),
+    [imageMap, loupe.imageId]
   );
 
   // Get the navigable image list (burst frames or all images)
   const navigableImages = useMemo(() => {
     if (loupe.burstId) {
-      const burst = burstGroups.find((b) => b.id === loupe.burstId);
-      return burst ? burst.images : [];
+      const burst = normalizedBurstGroups.find((b) => b.id === loupe.burstId);
+      return burst
+        ? burst.imageIds.map((id) => imageMap.get(id)!).filter(Boolean)
+        : [];
     }
-    return images;
-  }, [loupe.burstId, burstGroups, images]);
+    return imageOrder.map((id) => imageMap.get(id)!).filter(Boolean);
+  }, [loupe.burstId, normalizedBurstGroups, imageMap, imageOrder]);
 
   const currentIndex = useMemo(
     () => navigableImages.findIndex((img) => img.id === loupe.imageId),
@@ -53,8 +46,8 @@ function LoupeView() {
 
   const burstInfo = useMemo(() => {
     if (!loupe.burstId) return null;
-    return burstGroups.find((b) => b.id === loupe.burstId) || null;
-  }, [loupe.burstId, burstGroups]);
+    return normalizedBurstGroups.find((b) => b.id === loupe.burstId) || null;
+  }, [loupe.burstId, normalizedBurstGroups]);
 
   // Flag counts for filmstrip summary
   const flagCounts = useMemo(() => {
@@ -135,7 +128,6 @@ function LoupeView() {
 
   const loupeUrl = loupe.loupeUrls[currentImage.path];
   const thumbnailUrl = currentImage.thumbnailUrl;
-  // Show thumbnail first, swap to full-res when ready
   const displayUrl = loupeUrl || thumbnailUrl;
 
   const exifParts = [
@@ -177,7 +169,6 @@ function LoupeView() {
 
       {/* Main image */}
       <div className="loupe-main">
-        {/* Flag indicator */}
         {currentImage.flag === 'pick' && (
           <div className="loupe-flag pick">✓ Pick</div>
         )}
@@ -185,7 +176,6 @@ function LoupeView() {
           <div className="loupe-flag reject">✕ Reject</div>
         )}
 
-        {/* Rating */}
         {currentImage.rating > 0 && (
           <div className="loupe-rating">
             {'★'.repeat(currentImage.rating)}
@@ -205,7 +195,6 @@ function LoupeView() {
           </div>
         )}
 
-        {/* Nav arrows */}
         {currentIndex > 0 && (
           <button className="loupe-nav loupe-nav-left" onClick={loupePrev}>‹</button>
         )}
@@ -214,7 +203,7 @@ function LoupeView() {
         )}
       </div>
 
-      {/* Filmstrip (burst mode only, or when navigating all images) */}
+      {/* Filmstrip */}
       {navigableImages.length > 1 && (
         <div className="loupe-filmstrip">
           <div className="filmstrip-scroll">
@@ -260,7 +249,6 @@ function FilmstripThumb({
   const hue = image._placeholderHue || 0;
   const brightness = image._placeholderBrightness || 0.5;
 
-  // Auto-scroll active thumb into view
   useEffect(() => {
     if (isActive && thumbRef.current) {
       thumbRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });

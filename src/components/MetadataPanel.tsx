@@ -3,15 +3,16 @@ import { useImageStore } from '../stores/imageStore';
 import './MetadataPanel.css';
 
 function MetadataPanel() {
-  const { images, selectedIds } = useImageStore();
+  const { imageMap, selectedIds } = useImageStore();
 
   const selectedImage = useMemo(() => {
     if (selectedIds.size !== 1) return null;
     const id = Array.from(selectedIds)[0];
-    return images.find(img => img.id === id) || null;
-  }, [images, selectedIds]);
+    return imageMap.get(id) ?? null;
+  }, [imageMap, selectedIds]);
 
   const selectionCount = selectedIds.size;
+  const hasImages = imageMap.size > 0;
 
   return (
     <div className="metadata-panel">
@@ -20,7 +21,7 @@ function MetadataPanel() {
       </div>
 
       <div className="panel-body">
-        {selectionCount === 0 && images.length === 0 && (
+        {selectionCount === 0 && !hasImages && (
           <div className="panel-empty">
             <div className="empty-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
@@ -31,7 +32,7 @@ function MetadataPanel() {
           </div>
         )}
 
-        {selectionCount === 0 && images.length > 0 && (
+        {selectionCount === 0 && hasImages && (
           <div className="panel-empty">
             <div className="empty-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">

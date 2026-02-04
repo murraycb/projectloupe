@@ -2,7 +2,7 @@ import { useImageStore } from '../stores/imageStore';
 import './FilterBar.css';
 
 function FilterBar() {
-  const { images, filters, setFilter, clearFilters } = useImageStore();
+  const { imageMap, filters, setFilter, clearFilters } = useImageStore();
 
   const handleStarFilter = (rating: number) => {
     setFilter('minRating', filters.minRating === rating ? 0 : rating);
@@ -22,16 +22,19 @@ function FilterBar() {
     setFilter('colorLabels', newColorLabels);
   };
 
-  const filteredCount = images.filter(image => {
-    if (image.rating < filters.minRating) return false;
-    if (filters.flags.size > 0 && !filters.flags.has(image.flag)) return false;
-    if (filters.colorLabels.size > 0 && !filters.colorLabels.has(image.colorLabel)) return false;
-    if (filters.showBurstsOnly && !image.burstGroupId) return false;
-    return true;
-  }).length;
+  let filteredCount = 0;
+  for (const [, image] of imageMap) {
+    if (image.rating >= filters.minRating &&
+        (filters.flags.size === 0 || filters.flags.has(image.flag)) &&
+        (filters.colorLabels.size === 0 || filters.colorLabels.has(image.colorLabel)) &&
+        (!filters.showBurstsOnly || image.burstGroupId)) {
+      filteredCount++;
+    }
+  }
 
   const hasActiveFilters = filters.minRating > 0 || filters.flags.size > 0 || filters.colorLabels.size > 0 || filters.showBurstsOnly;
-  const hasImages = images.length > 0;
+  const totalCount = imageMap.size;
+  const hasImages = totalCount > 0;
 
   return (
     <div className={`filter-bar ${!hasImages ? 'disabled' : ''}`}>
@@ -99,9 +102,9 @@ function FilterBar() {
 
       <span className="filter-count">
         {hasImages ? (
-          filteredCount === images.length
-            ? `${images.length} images`
-            : `${filteredCount} of ${images.length}`
+          filteredCount === totalCount
+            ? `${totalCount} images`
+            : `${filteredCount} of ${totalCount}`
         ) : (
           'No images'
         )}

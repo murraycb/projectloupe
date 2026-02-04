@@ -1,22 +1,21 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef, useMemo, useEffect, useState } from 'react';
 import { useImageStore } from '../stores/imageStore';
-import { ImageEntry, BurstGroupData } from '../types';
+import { ImageEntry } from '../types';
 import ThumbnailCard from './ThumbnailCard';
 import BurstGroup from './BurstGroup';
 import IngestPanel from './IngestPanel';
 import './ThumbnailGrid.css';
 
-type DisplayItem = {
-  type: 'image' | 'burst' | 'camera-header';
-  data: ImageEntry | BurstGroupData | { serial: string; label: string; count: number };
-  id: string;
-};
+type DisplayItem =
+  | { type: 'image'; id: string; data: ImageEntry }
+  | { type: 'burst'; id: string; burstId: string }
+  | { type: 'camera-header'; id: string; data: { serial: string; label: string; count: number } };
 
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { images, burstGroups, cameras, filters } = useImageStore();
+  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters } = useImageStore();
 
   // Responsive column count
   useEffect(() => {
@@ -33,8 +32,10 @@ function ThumbnailGrid() {
   }, []);
 
   // Filter images
-  const filteredImages = useMemo(() => {
-    return images.filter((image) => {
+  const filteredIds = useMemo(() => {
+    return imageOrder.filter((id) => {
+      const image = imageMap.get(id);
+      if (!image) return false;
       if (image.rating < filters.minRating) return false;
       if (filters.flags.size > 0 && !filters.flags.has(image.flag)) return false;
       if (filters.colorLabels.size > 0 && !filters.colorLabels.has(image.colorLabel)) return false;
@@ -42,7 +43,7 @@ function ThumbnailGrid() {
       if (filters.cameraSerial && image.serialNumber !== filters.cameraSerial) return false;
       return true;
     });
-  }, [images, filters]);
+  }, [imageMap, imageOrder, filters]);
 
   // Build display items: camera sections with bursts and singles
   const displayItems = useMemo(() => {
@@ -51,51 +52,52 @@ function ThumbnailGrid() {
     const showCameraHeaders = cameras.length > 1;
 
     if (showCameraHeaders) {
-      // Group by camera serial
-      const byCamera = new Map<string, ImageEntry[]>();
-      for (const img of filteredImages) {
+      const byCamera = new Map<string, string[]>();
+      for (const id of filteredIds) {
+        const img = imageMap.get(id)!;
         const list = byCamera.get(img.serialNumber) || [];
-        list.push(img);
+        list.push(id);
         byCamera.set(img.serialNumber, list);
       }
 
-      for (const [serial, cameraImages] of byCamera) {
+      for (const [serial, cameraImageIds] of byCamera) {
         const cam = cameras.find((c) => c.serial === serial);
         const label = cam ? `${cam.make} ${cam.model}` : serial;
 
         items.push({
           type: 'camera-header',
-          data: { serial, label, count: cameraImages.length },
+          data: { serial, label, count: cameraImageIds.length },
           id: `camera-${serial}`,
         });
 
-        addImagesAsItems(cameraImages, items, processedBursts);
+        addImagesAsItems(cameraImageIds, items, processedBursts);
       }
     } else {
-      addImagesAsItems(filteredImages, items, processedBursts);
+      addImagesAsItems(filteredIds, items, processedBursts);
     }
 
     return items;
-  }, [filteredImages, cameras, burstGroups]);
+  }, [filteredIds, cameras, normalizedBurstGroups, imageMap]);
 
   function addImagesAsItems(
-    imageList: ImageEntry[],
+    imageIds: string[],
     items: DisplayItem[],
     processedBursts: Set<string>,
   ) {
-    for (const image of imageList) {
-      if (image.burstGroupId && !processedBursts.has(image.burstGroupId)) {
-        const burst = burstGroups.find((b) => b.id === image.burstGroupId);
+    for (const id of imageIds) {
+      const img = imageMap.get(id)!;
+      if (img.burstGroupId && !processedBursts.has(img.burstGroupId)) {
+        const burst = normalizedBurstGroups.find((b) => b.id === img.burstGroupId);
         if (burst) {
           items.push({
             type: 'burst',
-            data: { ...burst, expanded: false },
             id: burst.id,
+            burstId: burst.id,
           });
         }
-        processedBursts.add(image.burstGroupId);
-      } else if (!image.burstGroupId) {
-        items.push({ type: 'image', data: image, id: image.id });
+        processedBursts.add(img.burstGroupId);
+      } else if (!img.burstGroupId) {
+        items.push({ type: 'image', data: img, id: img.id });
       }
     }
   }
@@ -103,14 +105,12 @@ function ThumbnailGrid() {
   const ITEM_HEIGHT = 250;
   const HEADER_HEIGHT = 48;
 
-  // Calculate row data — camera headers take full width
   const rows = useMemo(() => {
     const result: { items: DisplayItem[]; height: number }[] = [];
     let currentRow: DisplayItem[] = [];
 
     for (const item of displayItems) {
       if (item.type === 'camera-header') {
-        // Flush current row
         if (currentRow.length > 0) {
           result.push({ items: currentRow, height: ITEM_HEIGHT });
           currentRow = [];
@@ -138,7 +138,7 @@ function ThumbnailGrid() {
   });
 
   // Empty state
-  if (images.length === 0) {
+  if (imageMap.size === 0) {
     return (
       <div ref={parentRef} className="thumbnail-grid">
         <IngestPanel />
@@ -188,10 +188,10 @@ function ThumbnailGrid() {
               {isHeader ? (
                 <div className="camera-header">
                   <span className="camera-label">
-                    {(row.items[0].data as any).label}
+                    {(row.items[0] as any).data.label}
                   </span>
                   <span className="camera-count">
-                    {(row.items[0].data as any).count} images
+                    {(row.items[0] as any).data.count} images
                   </span>
                 </div>
               ) : (
@@ -199,10 +199,10 @@ function ThumbnailGrid() {
                   {row.items.map((item) => (
                     <div key={item.id} className="grid-cell">
                       {item.type === 'image' ? (
-                        <ThumbnailCard image={item.data as ImageEntry} />
-                      ) : (
-                        <BurstGroup burstGroup={item.data as BurstGroupData} />
-                      )}
+                        <ThumbnailCard image={item.data} />
+                      ) : item.type === 'burst' ? (
+                        <BurstGroup burstId={item.burstId} />
+                      ) : null}
                     </div>
                   ))}
                 </div>
