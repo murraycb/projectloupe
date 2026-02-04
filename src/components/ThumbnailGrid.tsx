@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { useImageStore } from '../stores/imageStore';
 import { ImageEntry } from '../types';
 import ThumbnailCard from './ThumbnailCard';
@@ -16,7 +16,7 @@ type DisplayItem =
 function ThumbnailGrid() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(5);
-  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, expandedBursts, overlayMode } = useImageStore();
+  const { imageMap, imageOrder, normalizedBurstGroups, cameras, filters, thumbnailSize, expandedBursts } = useImageStore();
 
   // Responsive column count — derived from thumbnailSize
   const cellWidth = thumbnailSize + 16; // thumbnail + gap/padding
@@ -125,41 +125,31 @@ function ThumbnailGrid() {
     }
   }
 
-  // Row height: computed exactly from thumbnailSize + overlay + card chrome.
-  // No magic padding — cell height is deterministic for current overlay mode.
-  // All text lines use explicit line-height + white-space:nowrap to prevent wrapping.
-  //
-  // With box-sizing:border-box globally:
-  //
-  // Single card (ThumbnailCard):
-  //   .thumb-card border: 2px × 2 — eats into content, not additive
-  //   .thumb-image: aspect-ratio 1/1, content-width = thumbnailSize - 4
-  //   Total image area = border(2) + image(thumbnailSize-4) + border(2) = thumbnailSize
-  //   .thumb-info: pad 4+4, filename 16px, exif-brief 14px, exif-full 14px, gap 1px
-  //   → card height = thumbnailSize + overlay
-  //
-  // Burst card (BurstGroup collapsed):
-  //   No border. image-placeholder: aspect-ratio 1/1 = thumbnailSize
-  //   Stack layers are absolute — extend 6px below visually but overlap into
-  //   .image-info padding area, don't add to layout height
-  //   .image-info: pad 4+4, filename 16px, burst-info 14px
-  //   → card height = thumbnailSize + burstInfo
-  //
-  // All text: nowrap + ellipsis prevents wrapping at any thumbnail size.
-  // Line-heights explicit in CSS: filename=16px, exif/burst-info=14px.
-  const OVERLAY_HEIGHT: Record<string, number> = {
-    none: 0,
-    minimal: 24,  // pad 4 + filename 16 + pad 4
-    standard: 39, // pad 4 + filename 16 + gap 1 + exif-brief 14 + pad 4
-    full: 54,     // pad 4 + filename 16 + gap 1 + exif-brief 14 + gap 1 + exif-full 14 + pad 4
-  };
-  const BURST_INFO_HEIGHT = 38; // pad 4 + filename 16 + burst-info 14 + pad 4
-  const ROW_GAP = 8;            // var(--pl-space-sm) padding-bottom on .grid-row
+  // Row height: measured from hidden DOM elements, not hardcoded constants.
+  // Two hidden cards (single at max overlay + burst) are rendered off-screen.
+  // A ResizeObserver tracks their height — the tallest card + row gap = ITEM_HEIGHT.
+  // This self-heals when CSS changes, new widgets are added, fonts load, etc.
+  const singleMeasureRef = useRef<HTMLDivElement>(null);
+  const burstMeasureRef = useRef<HTMLDivElement>(null);
+  const [measuredCellHeight, setMeasuredCellHeight] = useState(thumbnailSize + 62); // fallback before first measure
 
-  const maxOverlay = OVERLAY_HEIGHT.full; // always reserve space for max overlay
-  const singleCardHeight = thumbnailSize + maxOverlay;
-  const burstCardHeight = thumbnailSize + BURST_INFO_HEIGHT;
-  const ITEM_HEIGHT = Math.max(singleCardHeight, burstCardHeight) + ROW_GAP;
+  const measureCells = useCallback(() => {
+    const sH = singleMeasureRef.current?.getBoundingClientRect().height ?? 0;
+    const bH = burstMeasureRef.current?.getBoundingClientRect().height ?? 0;
+    const maxH = Math.max(sH, bH);
+    if (maxH > 0) setMeasuredCellHeight(maxH);
+  }, []);
+
+  useEffect(() => {
+    measureCells();
+    const observer = new ResizeObserver(measureCells);
+    if (singleMeasureRef.current) observer.observe(singleMeasureRef.current);
+    if (burstMeasureRef.current) observer.observe(burstMeasureRef.current);
+    return () => observer.disconnect();
+  }, [thumbnailSize, measureCells]);
+
+  const ROW_GAP = 8; // var(--pl-space-sm) padding-bottom on .grid-row
+  const ITEM_HEIGHT = measuredCellHeight + ROW_GAP;
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
@@ -224,6 +214,42 @@ function ThumbnailGrid() {
 
   return (
     <div ref={parentRef} className="thumbnail-grid">
+      {/* Hidden measurement cards — derive row height from actual DOM rendering.
+          Renders both card types at max content so the grid always reserves enough
+          space. Self-heals when CSS changes, new widgets added, fonts load, etc. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          width: thumbnailSize,
+          zIndex: -1,
+        }}
+      >
+        {/* Single card at max overlay (full: filename + 2 exif lines) */}
+        <div ref={singleMeasureRef} className="thumb-card">
+          <div className="thumb-image" />
+          <div className="thumb-info">
+            <span className="thumb-filename">M</span>
+            <span className="thumb-exif-brief">M</span>
+            <span className="thumb-exif-full">M</span>
+          </div>
+        </div>
+        {/* Burst card (filename + burst info) */}
+        <div ref={burstMeasureRef} className="burst-group collapsed">
+          <div className="burst-card">
+            <div className="image-stack">
+              <div className="image-placeholder" />
+            </div>
+            <div className="image-info">
+              <div className="filename">M</div>
+              <div className="burst-info">M</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div
         style={{
           height: `${virtualizer.getTotalSize()}px`,
