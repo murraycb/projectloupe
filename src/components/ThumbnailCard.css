@@ -156,6 +156,11 @@
   border-color: var(--pl-selected-border);
 }
 
+/* Stars shift below the frame badge to avoid overlap */
+.thumb-card.burst-frame .thumb-stars {
+  top: calc(var(--pl-space-xs) + 20px);
+}
+
 .burst-frame-badge {
   position: absolute;
   top: var(--pl-space-xs);
