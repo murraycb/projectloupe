@@ -542,34 +542,54 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       selectedIds: new Set([startId]),
     });
 
-    // Pre-fetch full-res images
+    // Pre-fetch full-res images for the navigable set
     (async () => {
       if (!invoke) await loadTauriApis();
       if (!invoke || !convertFileSrc) return;
 
       try {
-        let pathsToFetch: string[];
-        if (burstId) {
-          const burst = normalizedBurstGroups.find((b) => b.id === burstId);
-          pathsToFetch = burst
-            ? burst.imageIds.map((id) => imageMap.get(id)!.path)
-            : [image.path];
-        } else {
-          pathsToFetch = [image.path];
+        // Build the full list of paths we'll navigate through
+        const navigableIds = getLoupeNavigableIds(
+          { active: true, imageId: startId, burstId, loupeUrls: {} },
+          imageMap, imageOrder, normalizedBurstGroups, filters,
+        );
+        const pathsToFetch = navigableIds
+          .map((id) => imageMap.get(id)?.path)
+          .filter(Boolean) as string[];
+
+        if (pathsToFetch.length === 0) return;
+
+        // Fetch current image first for instant display, then the rest
+        const currentPath = imageMap.get(startId)?.path;
+        if (currentPath) {
+          const firstMap = await invoke('extract_burst_loupe_images', {
+            filePaths: [currentPath],
+          }) as Record<string, string>;
+
+          const firstUrls: Record<string, string> = {};
+          for (const [filePath, cachePath] of Object.entries(firstMap)) {
+            firstUrls[filePath] = convertFileSrc!(cachePath);
+          }
+          set((state) => ({
+            loupe: { ...state.loupe, loupeUrls: { ...state.loupe.loupeUrls, ...firstUrls } },
+          }));
         }
 
-        const loupeMap = await invoke('extract_burst_loupe_images', {
-          filePaths: pathsToFetch,
-        }) as Record<string, string>;
+        // Then prefetch the rest in background
+        const remainingPaths = pathsToFetch.filter((p) => p !== currentPath);
+        if (remainingPaths.length > 0) {
+          const loupeMap = await invoke('extract_burst_loupe_images', {
+            filePaths: remainingPaths,
+          }) as Record<string, string>;
 
-        const loupeUrls: Record<string, string> = {};
-        for (const [filePath, cachePath] of Object.entries(loupeMap)) {
-          loupeUrls[filePath] = convertFileSrc!(cachePath);
+          const loupeUrls: Record<string, string> = {};
+          for (const [filePath, cachePath] of Object.entries(loupeMap)) {
+            loupeUrls[filePath] = convertFileSrc!(cachePath);
+          }
+          set((state) => ({
+            loupe: { ...state.loupe, loupeUrls: { ...state.loupe.loupeUrls, ...loupeUrls } },
+          }));
         }
-
-        set((state) => ({
-          loupe: { ...state.loupe, loupeUrls: { ...state.loupe.loupeUrls, ...loupeUrls } },
-        }));
       } catch (err) {
         console.error('Failed to extract loupe images:', err);
       }
