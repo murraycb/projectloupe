@@ -67,7 +67,7 @@
 
 .image-placeholder {
   position: relative;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 1 / 1;
   border-radius: var(--pl-radius-md);
   overflow: hidden;
   display: flex;

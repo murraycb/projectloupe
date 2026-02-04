@@ -125,8 +125,8 @@ function ThumbnailGrid() {
     }
   }
 
-  // Row height: image (3:2 aspect) + overlay text + padding + burst stack offset
-  const imageHeight = Math.round(thumbnailSize * (2 / 3));
+  // Row height: image (1:1 square) + overlay text + padding + burst stack offset
+  const imageHeight = thumbnailSize;
   const overlayHeight = overlayMode === 'none' ? 0
     : overlayMode === 'minimal' ? 36
     : overlayMode === 'standard' ? 50

@@ -1,9 +1,9 @@
 {
   "success": true,
   "result": {
-    "total_images": 73,
+    "total_images": 77,
     "total_bursts": 11,
-    "total_singles": 3,
+    "total_singles": 7,
     "cameras": [
       {
         "serial": "3002851",
@@ -18,6 +18,12 @@
         "model": "NIKON Z 9",
         "image_count": 33,
         "burst_count": 3
+      },
+      {
+        "serial": "5001234",
+        "make": "SONY",
+        "model": "ILCE-7RM5",
+        "count": 4
       }
     ],
     "bursts": [
@@ -1227,6 +1233,70 @@
         "shutter_speed": "1/1250",
         "iso": 800,
         "burst_group_id": 15618
+      },
+      {
+        "file_path": "/Users/tinotran/.openclaw/workspace/projectloupe/test-raws/PORTRAIT_001.jpg",
+        "filename": "PORTRAIT_001.jpg",
+        "serial_number": "5001234",
+        "drive_mode": "Single",
+        "capture_time": "2025-08-15T02:10:00.000Z",
+        "make": "SONY",
+        "model": "ILCE-7RM5",
+        "lens": "FE 85mm F1.4 GM",
+        "focal_length": 85,
+        "aperture": 1.4,
+        "shutter_speed": "1/500",
+        "iso": 200,
+        "burst_group_id": null,
+        "orientation": 6
+      },
+      {
+        "file_path": "/Users/tinotran/.openclaw/workspace/projectloupe/test-raws/PORTRAIT_002.jpg",
+        "filename": "PORTRAIT_002.jpg",
+        "serial_number": "5001234",
+        "drive_mode": "Single",
+        "capture_time": "2025-08-15T02:12:00.000Z",
+        "make": "SONY",
+        "model": "ILCE-7RM5",
+        "lens": "FE 85mm F1.4 GM",
+        "focal_length": 85,
+        "aperture": 2.0,
+        "shutter_speed": "1/320",
+        "iso": 400,
+        "burst_group_id": null,
+        "orientation": 6
+      },
+      {
+        "file_path": "/Users/tinotran/.openclaw/workspace/projectloupe/test-raws/PORTRAIT_003.jpg",
+        "filename": "PORTRAIT_003.jpg",
+        "serial_number": "5001234",
+        "drive_mode": "Single",
+        "capture_time": "2025-08-15T02:15:00.000Z",
+        "make": "SONY",
+        "model": "ILCE-7RM5",
+        "lens": "FE 135mm F1.8 GM",
+        "focal_length": 135,
+        "aperture": 1.8,
+        "shutter_speed": "1/640",
+        "iso": 100,
+        "burst_group_id": null,
+        "orientation": 6
+      },
+      {
+        "file_path": "/Users/tinotran/.openclaw/workspace/projectloupe/test-raws/PORTRAIT_004.jpg",
+        "filename": "PORTRAIT_004.jpg",
+        "serial_number": "5001234",
+        "drive_mode": "Single",
+        "capture_time": "2025-08-15T02:18:00.000Z",
+        "make": "SONY",
+        "model": "ILCE-7RM5",
+        "lens": "FE 85mm F1.4 GM",
+        "focal_length": 85,
+        "aperture": 1.4,
+        "shutter_speed": "1/250",
+        "iso": 320,
+        "burst_group_id": null,
+        "orientation": 6
       }
     ]
   }
