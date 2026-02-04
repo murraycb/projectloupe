@@ -77,6 +77,8 @@ interface ImageStore {
   importFolder: () => Promise<void>;
   importPath: (folderPath: string) => Promise<void>;
   importFromJson: (url: string) => Promise<void>;
+  loadSession: (folderPath: string) => Promise<boolean>;
+  applyAnnotations: () => Promise<void>;
   extractThumbnails: () => Promise<void>;
 
   // === Actions — loupe ===
@@ -223,16 +225,22 @@ export const useImageStore = create<ImageStore>((set, get) => ({
 
   setRating: (imageId, rating) => {
     set((state) => ({ imageMap: updateInMap(state.imageMap, imageId, { rating }) }));
+    // Write-through to SQLite (fire-and-forget)
+    invoke?.('persist_rating', { filePath: imageId, rating }).catch(() => {});
   },
 
   setFlag: (imageId, flag) => {
     const current = get().imageMap.get(imageId);
     const newFlag = current && current.flag === flag ? 'none' : flag;
     set((state) => ({ imageMap: updateInMap(state.imageMap, imageId, { flag: newFlag }) }));
+    // Write-through to SQLite
+    invoke?.('persist_flag', { filePath: imageId, flag: newFlag }).catch(() => {});
   },
 
   setColorLabel: (imageId, label) => {
     set((state) => ({ imageMap: updateInMap(state.imageMap, imageId, { colorLabel: label }) }));
+    // Write-through to SQLite
+    invoke?.('persist_color_label', { filePath: imageId, colorLabel: label }).catch(() => {});
   },
 
   toggleSelection: (imageId) => {
@@ -295,6 +303,11 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       }
 
       const folderPath = typeof selectedPath === 'string' ? selectedPath : (selectedPath as string[])[0];
+
+      // Try loading existing session first
+      const restored = await get().loadSession(folderPath);
+      if (restored) return;
+
       const response = await invoke('import_folder', {
         request: { folderPath },
       }) as ImportResult;
@@ -323,6 +336,10 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     try {
       if (!invoke) await loadTauriApis();
       if (!invoke) throw new Error('Tauri APIs not available');
+
+      // Try loading existing session first
+      const restored = await get().loadSession(folderPath);
+      if (restored) return;
 
       const response = await invoke('import_folder', {
         request: { folderPath },
@@ -370,6 +387,68 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     } catch (err: any) {
       const errorMsg = typeof err === 'string' ? err : (err?.message || 'Unknown error');
       set({ isImporting: false, importError: errorMsg });
+    }
+  },
+
+  // Try to load an existing session from SQLite. Returns true if session existed.
+  loadSession: async (folderPath: string) => {
+    if (!invoke) await loadTauriApis();
+    if (!invoke) return false;
+
+    try {
+      const response = await invoke('load_session', { folderPath }) as ImportResult;
+      if (!response.success || !response.result) return false;
+
+      const hydrated = hydrateFromPayload(response.result);
+      set({
+        ...hydrated,
+        folderPath,
+        isImporting: false,
+        importError: null,
+      });
+
+      // Apply persisted annotations (flags, ratings, labels)
+      await get().applyAnnotations();
+      get().extractThumbnails();
+
+      console.log(`Restored session: ${hydrated.imageMap.size} images from SQLite`);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // Load and apply persisted annotations from SQLite onto the in-memory store.
+  applyAnnotations: async () => {
+    if (!invoke) return;
+
+    try {
+      const annotations = await invoke('load_annotations', {}) as Record<
+        string,
+        { flag: string; rating: number; color_label: string }
+      >;
+
+      if (!annotations || Object.keys(annotations).length === 0) return;
+
+      set((state) => {
+        const newMap = new Map(state.imageMap);
+        for (const [filePath, ann] of Object.entries(annotations)) {
+          const img = newMap.get(filePath);
+          if (img) {
+            newMap.set(filePath, {
+              ...img,
+              flag: ann.flag as ImageEntry['flag'],
+              rating: ann.rating,
+              colorLabel: ann.color_label as ImageEntry['colorLabel'],
+            });
+          }
+        }
+        return { imageMap: newMap };
+      });
+
+      console.log(`Applied ${Object.keys(annotations).length} persisted annotations`);
+    } catch (err) {
+      console.error('Failed to load annotations:', err);
     }
   },
 

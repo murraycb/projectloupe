@@ -24,6 +24,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{command, State, Manager, Emitter};
 use burst_detection::{BurstDetector, BurstResult, ExifData, ExiftoolRunner};
+use session_db::{SessionDb, ImageRecord, BurstGroupRecord};
 
 /// Supported image file extensions
 const IMAGE_EXTENSIONS: &[&str] = &[
@@ -41,6 +42,8 @@ struct AppState {
     cache_dir: PathBuf,
     /// Map of source file path → thumbnail cache path
     thumbnail_cache: Mutex<HashMap<String, String>>,
+    /// SQLite session database (initialized on first import/load)
+    session_db: Mutex<Option<SessionDb>>,
 }
 
 // -- Command payloads --
@@ -158,6 +161,47 @@ fn result_to_payload(result: &BurstResult) -> BurstResultPayload {
     }
 }
 
+/// Convert a frontend ImagePayload to a database ImageRecord.
+fn payload_to_record(img: &ImagePayload, burst_id: Option<&str>, burst_index: Option<i32>) -> ImageRecord {
+    let path = PathBuf::from(&img.file_path);
+    let (file_size, file_mtime) = std::fs::metadata(&path)
+        .map(|m| {
+            let size = m.len() as i64;
+            let mtime = m.modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+            (size, mtime)
+        })
+        .unwrap_or((0, 0));
+
+    ImageRecord {
+        file_path: img.file_path.clone(),
+        filename: img.filename.clone(),
+        file_size,
+        file_mtime,
+        cache_hash: format!("{:x}", file_size.wrapping_mul(file_mtime.wrapping_add(1))),
+        serial_number: img.serial_number.clone(),
+        drive_mode: img.drive_mode.clone(),
+        capture_time: img.capture_time.clone(),
+        make: img.make.clone(),
+        model: img.model.clone(),
+        lens: img.lens.clone(),
+        focal_length: img.focal_length,
+        aperture: img.aperture,
+        shutter_speed: img.shutter_speed.clone(),
+        iso: img.iso,
+        rating: 0,
+        flag: "none".to_string(),
+        color_label: "none".to_string(),
+        burst_group_id: burst_id.map(|s| s.to_string()),
+        burst_index,
+        micro_cached: false,
+        preview_cached: false,
+    }
+}
+
 // -- Commands --
 
 /// Import a folder: scan for images, extract EXIF, detect bursts.
@@ -208,6 +252,45 @@ async fn import_folder(
         .map_err(|e| format!("Burst detection failed: {}", e))?;
 
     let payload = result_to_payload(&burst_result);
+
+    // 4. Persist to SQLite
+    {
+        let db = SessionDb::open(&request.folder_path)
+            .map_err(|e| format!("Failed to open session DB: {}", e))?;
+
+        db.set_meta("root_folder", &request.folder_path)
+            .map_err(|e| e.to_string())?;
+
+        // Convert to image records
+        let mut records: Vec<ImageRecord> = Vec::new();
+        for burst in &payload.bursts {
+            for (i, img) in burst.images.iter().enumerate() {
+                records.push(payload_to_record(img, Some(&burst.id), Some(i as i32)));
+            }
+        }
+        for img in &payload.singles {
+            records.push(payload_to_record(img, None, None));
+        }
+        db.upsert_images(&records).map_err(|e| e.to_string())?;
+
+        // Persist burst groups
+        let burst_records: Vec<BurstGroupRecord> = payload.bursts.iter().map(|b| {
+            BurstGroupRecord {
+                id: b.id.clone(),
+                camera_serial: b.camera_serial.clone(),
+                frame_count: b.frame_count as i32,
+                duration_ms: b.duration_ms,
+                avg_gap_ms: b.avg_gap_ms,
+                estimated_fps: b.estimated_fps,
+            }
+        }).collect();
+        db.upsert_burst_groups(&burst_records).map_err(|e| e.to_string())?;
+
+        // Store the DB handle
+        if let Ok(mut db_guard) = state.session_db.lock() {
+            *db_guard = Some(db);
+        }
+    }
 
     // Cache result
     if let Ok(mut cache) = state.last_result.lock() {
@@ -424,6 +507,211 @@ async fn extract_burst_loupe_images(
     Ok(result_map)
 }
 
+/// Check if a session exists for the given folder and load it.
+/// Returns the same ImportResult format as import_folder for frontend compatibility.
+#[command]
+async fn load_session(
+    folder_path: String,
+    state: State<'_, AppState>,
+) -> Result<ImportResult, String> {
+    if !SessionDb::exists(&folder_path) {
+        return Ok(ImportResult {
+            success: false,
+            result: None,
+            error: Some("No session found for this folder".to_string()),
+        });
+    }
+
+    let db = SessionDb::open(&folder_path)
+        .map_err(|e| format!("Failed to open session DB: {}", e))?;
+
+    let images = db.load_images().map_err(|e| e.to_string())?;
+    let burst_groups = db.load_burst_groups().map_err(|e| e.to_string())?;
+
+    if images.is_empty() {
+        return Ok(ImportResult {
+            success: false,
+            result: None,
+            error: Some("Session database is empty".to_string()),
+        });
+    }
+
+    // Reconstruct the payload from DB records
+    let mut cameras_map: HashMap<String, CameraPayload> = HashMap::new();
+    let mut burst_images: HashMap<String, Vec<ImagePayload>> = HashMap::new();
+    let mut singles: Vec<ImagePayload> = Vec::new();
+
+    for img in &images {
+        // Track cameras
+        let cam = cameras_map.entry(img.serial_number.clone()).or_insert_with(|| CameraPayload {
+            serial: img.serial_number.clone(),
+            make: img.make.clone().unwrap_or_default(),
+            model: img.model.clone().unwrap_or_default(),
+            image_count: 0,
+            burst_count: 0,
+        });
+        cam.image_count += 1;
+
+        let payload = ImagePayload {
+            file_path: img.file_path.clone(),
+            filename: img.filename.clone(),
+            serial_number: img.serial_number.clone(),
+            drive_mode: img.drive_mode.clone(),
+            capture_time: img.capture_time.clone(),
+            make: img.make.clone(),
+            model: img.model.clone(),
+            lens: img.lens.clone(),
+            focal_length: img.focal_length,
+            aperture: img.aperture,
+            shutter_speed: img.shutter_speed.clone(),
+            iso: img.iso,
+            burst_group_id: None,
+            high_frame_rate: None,
+        };
+
+        if let Some(ref burst_id) = img.burst_group_id {
+            burst_images.entry(burst_id.clone()).or_default().push(payload);
+        } else {
+            singles.push(payload);
+        }
+    }
+
+    // Count bursts per camera
+    for bg in &burst_groups {
+        if let Some(cam) = cameras_map.get_mut(&bg.camera_serial) {
+            cam.burst_count += 1;
+        }
+    }
+
+    // Build burst payloads
+    let bursts: Vec<BurstPayload> = burst_groups.iter().map(|bg| {
+        BurstPayload {
+            id: bg.id.clone(),
+            camera_serial: bg.camera_serial.clone(),
+            frame_count: bg.frame_count as usize,
+            duration_ms: bg.duration_ms,
+            avg_gap_ms: bg.avg_gap_ms,
+            estimated_fps: bg.estimated_fps,
+            images: burst_images.remove(&bg.id).unwrap_or_default(),
+        }
+    }).collect();
+
+    // Build result with persisted user annotations
+    let total_images = images.len();
+    let total_bursts = bursts.len();
+    let total_singles = singles.len();
+
+    // Store DB handle for future write-through
+    if let Ok(mut db_guard) = state.session_db.lock() {
+        *db_guard = Some(db);
+    }
+
+    // Build payload — we need to include the persisted flags/ratings.
+    // The frontend will read these from a separate annotations structure.
+    let result = BurstResultPayload {
+        total_images,
+        total_bursts,
+        total_singles,
+        cameras: cameras_map.into_values().collect(),
+        bursts,
+        singles,
+    };
+
+    Ok(ImportResult {
+        success: true,
+        result: Some(result),
+        error: None,
+    })
+}
+
+/// Persist a flag change to SQLite (write-through from UI).
+#[command]
+async fn persist_flag(
+    file_path: String,
+    flag: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db_guard = state.session_db.lock().map_err(|e| e.to_string())?;
+    if let Some(ref db) = *db_guard {
+        db.update_flag(&file_path, &flag).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Persist a rating change to SQLite.
+#[command]
+async fn persist_rating(
+    file_path: String,
+    rating: i32,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db_guard = state.session_db.lock().map_err(|e| e.to_string())?;
+    if let Some(ref db) = *db_guard {
+        db.update_rating(&file_path, rating).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Persist a color label change to SQLite.
+#[command]
+async fn persist_color_label(
+    file_path: String,
+    color_label: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db_guard = state.session_db.lock().map_err(|e| e.to_string())?;
+    if let Some(ref db) = *db_guard {
+        db.update_color_label(&file_path, &color_label).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Persist batch flag changes (e.g., burst flagging).
+#[command]
+async fn persist_flags_batch(
+    updates: Vec<(String, String)>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db_guard = state.session_db.lock().map_err(|e| e.to_string())?;
+    if let Some(ref db) = *db_guard {
+        let refs: Vec<(&str, &str)> = updates.iter().map(|(p, f)| (p.as_str(), f.as_str())).collect();
+        db.update_flags_batch(&refs).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Load persisted annotations (flags, ratings, labels) for session restore.
+/// Returns a map of file_path → {flag, rating, colorLabel}.
+#[command]
+async fn load_annotations(
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, AnnotationPayload>, String> {
+    let db_guard = state.session_db.lock().map_err(|e| e.to_string())?;
+    if let Some(ref db) = *db_guard {
+        let images = db.load_images().map_err(|e| e.to_string())?;
+        let mut annotations = HashMap::new();
+        for img in images {
+            if img.flag != "none" || img.rating != 0 || img.color_label != "none" {
+                annotations.insert(img.file_path, AnnotationPayload {
+                    flag: img.flag,
+                    rating: img.rating,
+                    color_label: img.color_label,
+                });
+            }
+        }
+        Ok(annotations)
+    } else {
+        Ok(HashMap::new())
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct AnnotationPayload {
+    flag: String,
+    rating: i32,
+    color_label: String,
+}
+
 #[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -471,6 +759,7 @@ fn main() {
             last_result: Mutex::new(None),
             cache_dir,
             thumbnail_cache: Mutex::new(HashMap::new()),
+            session_db: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -480,6 +769,12 @@ fn main() {
             get_thumbnail,
             extract_loupe_image,
             extract_burst_loupe_images,
+            load_session,
+            persist_flag,
+            persist_rating,
+            persist_color_label,
+            persist_flags_batch,
+            load_annotations,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

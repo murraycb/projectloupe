@@ -27,6 +27,7 @@ tokio = { workspace = true }
 
 # Local crates
 burst-detection = { path = "../crates/burst-detection" }
+session-db = { path = "../crates/session-db" }
 dirs = "6.0.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
