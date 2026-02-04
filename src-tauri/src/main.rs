@@ -22,9 +22,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
-use tauri::{command, State, Manager, Emitter};
+use tauri::{command, State, Emitter};
 use burst_detection::{BurstDetector, BurstResult, ExifData, ExiftoolRunner};
 use session_db::{SessionDb, ImageRecord, BurstGroupRecord};
+use thumbnail_cache::{ThumbnailCache, ThumbnailTier};
 
 /// Supported image file extensions
 const IMAGE_EXTENSIONS: &[&str] = &[
@@ -44,6 +45,8 @@ struct AppState {
     thumbnail_cache: Mutex<HashMap<String, String>>,
     /// SQLite session database (initialized on first import/load)
     session_db: Mutex<Option<SessionDb>>,
+    /// New thumbnail cache manager (v2)
+    thumbnail_cache_v2: Mutex<Option<ThumbnailCache>>,
 }
 
 // -- Command payloads --
@@ -717,6 +720,167 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+// -- Thumbnail Cache V2 Commands --
+
+/// Get a thumbnail from the v2 cache system
+#[command]
+async fn get_thumbnail_v2(
+    file_path: String,
+    tier: String,
+    state: State<'_, AppState>,
+) -> Result<Option<Vec<u8>>, String> {
+    let tier: ThumbnailTier = tier.parse().map_err(|e| format!("Invalid tier: {}", e))?;
+    
+    // Initialize thumbnail cache if not already done
+    {
+        let mut cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+        if cache_guard.is_none() {
+            let session_hash = "main"; // TODO: Use actual session hash
+            let cache = ThumbnailCache::new(session_hash).map_err(|e| e.to_string())?;
+            *cache_guard = Some(cache);
+        }
+    }
+    
+    let cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+    let cache = cache_guard.as_ref().unwrap();
+    
+    match cache.get_or_generate(&file_path, tier) {
+        Ok(data) => Ok(Some(data)),
+        Err(e) => {
+            eprintln!("Failed to get/generate thumbnail for {}: {}", file_path, e);
+            Ok(None)
+        }
+    }
+}
+
+/// Get thumbnails for multiple files, returning file_path -> cache_path mapping
+#[command]
+async fn get_thumbnails_batch_v2(
+    file_paths: Vec<String>,
+    tier: String,
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, String>, String> {
+    let tier: ThumbnailTier = tier.parse().map_err(|e| format!("Invalid tier: {}", e))?;
+    
+    // Initialize thumbnail cache if not already done
+    {
+        let mut cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+        if cache_guard.is_none() {
+            let session_hash = "main"; // TODO: Use actual session hash
+            let cache = ThumbnailCache::new(session_hash).map_err(|e| e.to_string())?;
+            *cache_guard = Some(cache);
+        }
+    }
+    
+    let cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+    let cache = cache_guard.as_ref().unwrap();
+    
+    let results = cache.generate_batch(&file_paths, tier, |completed, total| {
+        // TODO: Emit progress events to frontend
+        println!("Thumbnail batch progress: {}/{}", completed, total);
+    }).map_err(|e| e.to_string())?;
+    
+    let mut success_map = HashMap::new();
+    for (file_path, result) in results {
+        match result {
+            Ok(cache_path) => {
+                success_map.insert(file_path, cache_path);
+            }
+            Err(e) => {
+                eprintln!("Failed to generate thumbnail for {}: {}", file_path, e);
+            }
+        }
+    }
+    
+    Ok(success_map)
+}
+
+/// Start prefetching thumbnails in the background
+#[command]
+async fn prefetch_thumbnails(
+    file_paths: Vec<String>,
+    tier: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let tier: ThumbnailTier = tier.parse().map_err(|e| format!("Invalid tier: {}", e))?;
+    
+    // Initialize thumbnail cache if not already done
+    {
+        let mut cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+        if cache_guard.is_none() {
+            let session_hash = "main"; // TODO: Use actual session hash
+            let cache = ThumbnailCache::new(session_hash).map_err(|e| e.to_string())?;
+            *cache_guard = Some(cache);
+        }
+    }
+    
+    // TODO: Implement proper prefetch scheduling with PrefetchScheduler
+    // For now, just trigger batch generation synchronously
+    let cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+    let cache = cache_guard.as_ref().unwrap();
+    
+    // Run in background task but don't pass references
+    let results = cache.generate_batch(&file_paths, tier, |completed, total| {
+        println!("Prefetch progress: {}/{}", completed, total);
+    }).map_err(|e| e.to_string())?;
+    
+    println!("Prefetch completed for {} files", results.len());
+    
+    Ok(())
+}
+
+/// Placeholder for import progress (not implemented yet)
+#[derive(Debug, Serialize)]
+struct ImportProgress {
+    current_step: String,
+    progress_percent: f64,
+    files_processed: usize,
+    total_files: usize,
+}
+
+#[command]
+async fn get_import_progress(
+    _state: State<'_, AppState>,
+) -> Result<ImportProgress, String> {
+    // TODO: Implement actual progress tracking
+    Ok(ImportProgress {
+        current_step: "idle".to_string(),
+        progress_percent: 0.0,
+        files_processed: 0,
+        total_files: 0,
+    })
+}
+
+/// Get color swatches for multiple files
+#[command]
+async fn get_color_swatches(
+    file_paths: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, String>, String> {
+    // Initialize thumbnail cache if not already done
+    {
+        let mut cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+        if cache_guard.is_none() {
+            let session_hash = "main"; // TODO: Use actual session hash
+            let cache = ThumbnailCache::new(session_hash).map_err(|e| e.to_string())?;
+            *cache_guard = Some(cache);
+        }
+    }
+    
+    let cache_guard = state.thumbnail_cache_v2.lock().map_err(|e| e.to_string())?;
+    let cache = cache_guard.as_ref().unwrap();
+    
+    let swatches = cache.get_color_swatches(&file_paths).map_err(|e| e.to_string())?;
+    
+    // Convert ColorSwatch to hex strings
+    let hex_swatches: HashMap<String, String> = swatches
+        .into_iter()
+        .map(|(path, swatch)| (path, swatch.to_hex()))
+        .collect();
+    
+    Ok(hex_swatches)
+}
+
 // -- Helpers --
 
 /// Recursively scan a folder for supported image files
@@ -760,6 +924,7 @@ fn main() {
             cache_dir,
             thumbnail_cache: Mutex::new(HashMap::new()),
             session_db: Mutex::new(None),
+            thumbnail_cache_v2: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -775,6 +940,11 @@ fn main() {
             persist_color_label,
             persist_flags_batch,
             load_annotations,
+            get_thumbnail_v2,
+            get_thumbnails_batch_v2,
+            prefetch_thumbnails,
+            get_import_progress,
+            get_color_swatches,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
