@@ -125,13 +125,15 @@ function ThumbnailGrid() {
     }
   }
 
-  // Row height: image (1:1 square) + overlay text + padding + burst stack offset
+  // Row height: image (1:1 square) + overlay text + card chrome + burst stack offset + row gap
+  // Measured: burst stack layers add ~12px below card, selection outline adds ~6px,
+  // card border 4px, row gap 8px, overlay text varies by mode
   const imageHeight = thumbnailSize;
-  const overlayHeight = overlayMode === 'none' ? 0
-    : overlayMode === 'minimal' ? 36
-    : overlayMode === 'standard' ? 50
-    : 64; // full
-  const ITEM_HEIGHT = imageHeight + overlayHeight + 20; // 20 = card border + row gap + burst stack offset
+  const overlayHeight = overlayMode === 'none' ? 8
+    : overlayMode === 'minimal' ? 44
+    : overlayMode === 'standard' ? 58
+    : 72; // full
+  const ITEM_HEIGHT = imageHeight + overlayHeight + 36; // 36 = card border(4) + burst stack(14) + row gap(8) + selection outline(6) + safety(4)
   const HEADER_HEIGHT = 48;
 
   const rows = useMemo(() => {
