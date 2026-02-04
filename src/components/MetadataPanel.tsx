@@ -5,6 +5,8 @@ import './MetadataPanel.css';
 function MetadataPanel() {
   const { imageMap, selectedIds } = useImageStore();
 
+  // Show metadata for whatever is selected — the grid nav and loupe
+  // are responsible for selecting the correct image (cover for bursts, current for loupe)
   const selectedImage = useMemo(() => {
     if (selectedIds.size !== 1) return null;
     const id = Array.from(selectedIds)[0];
@@ -53,16 +55,26 @@ function MetadataPanel() {
         {selectedImage && (
           <div className="metadata-content">
             <div className="metadata-preview">
-              <div
-                className="preview-placeholder"
-                style={{
-                  backgroundColor: `hsl(${(selectedImage as any)._placeholderHue || 200}, 60%, ${((selectedImage as any)._placeholderBrightness || 0.5) * 100}%)`,
-                }}
-              >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
-                  <path d="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z" />
-                </svg>
-              </div>
+              {(selectedImage.previewThumbnailUrl || selectedImage.microThumbnailUrl || selectedImage.thumbnailUrl) ? (
+                <img
+                  className="preview-image"
+                  src={selectedImage.previewThumbnailUrl || selectedImage.microThumbnailUrl || selectedImage.thumbnailUrl}
+                  alt={selectedImage.filename}
+                  draggable={false}
+                />
+              ) : (
+                <div
+                  className="preview-placeholder"
+                  style={{
+                    backgroundColor: selectedImage.colorSwatch
+                      || `hsl(${selectedImage._placeholderHue || 200}, 60%, ${(selectedImage._placeholderBrightness || 0.5) * 100}%)`,
+                  }}
+                >
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                    <path d="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z" />
+                  </svg>
+                </div>
+              )}
             </div>
 
             <div className="metadata-filename">{selectedImage.filename}</div>

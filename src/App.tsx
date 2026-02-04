@@ -92,7 +92,12 @@ function App() {
           processedBursts.add(burstId);
           const burst = normalizedBurstGroups.find((b) => b.id === burstId);
           if (burst && burst.imageIds.length > 0) {
-            list.push(burst.imageIds[0]);
+            // Use cover image (first pick > first unflagged > first) — matches BurstGroup display
+            const burstImages = burst.imageIds.map((bid) => imageMap.get(bid)!).filter(Boolean);
+            const cover = burstImages.find((i) => i.flag === 'pick')
+              || burstImages.find((i) => i.flag === 'none')
+              || burstImages[0];
+            list.push(cover ? cover.id : burst.imageIds[0]);
           }
         }
       } else {
