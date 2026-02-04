@@ -46,6 +46,10 @@ body {
 }
 
 /* Dockview overrides — strip all default chrome */
+.dockview-theme-custom .dv-tabs-and-actions-container {
+  display: none !important;
+}
+
 .dockview-theme-custom .dv-tabs-container {
   display: none !important;
 }
