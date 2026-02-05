@@ -106,6 +106,7 @@ interface ImageStore {
   flattenBursts: boolean;                  // view-level: show all frames individually
   toggleFlattenBursts: () => void;
   cycleOverlayMode: () => void;
+  exportXmpSidecars: () => Promise<{ written: number; skipped: number; errors: string[] } | null>;
 }
 
 const overlayModes: OverlayMode[] = ['none', 'minimal', 'standard', 'full'];
@@ -824,6 +825,21 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       const idx = overlayModes.indexOf(state.overlayMode);
       return { overlayMode: overlayModes[(idx + 1) % overlayModes.length] };
     });
+  },
+
+  exportXmpSidecars: async () => {
+    try {
+      if (!invoke) await loadTauriApis();
+      if (!invoke) {
+        console.error('Tauri APIs not available — cannot export XMP sidecars');
+        return null;
+      }
+      const result = await invoke('export_xmp_sidecars', {}) as { written: number; skipped: number; errors: string[] };
+      return result;
+    } catch (err: any) {
+      console.error('XMP export failed:', err);
+      return null;
+    }
   },
 }));
 

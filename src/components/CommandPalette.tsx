@@ -20,12 +20,15 @@ function CommandPalette({ onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const {
     selectedIds,
+    imageMap,
+    folderPath,
     setRating,
     setFlag,
     setColorLabel,
     clearFilters,
     importFolder,
     cycleOverlayMode,
+    exportXmpSidecars,
   } = useImageStore();
 
   const selectedArray = Array.from(selectedIds);
@@ -49,7 +52,37 @@ function CommandPalette({ onClose }: CommandPaletteProps) {
     { id: 'clear-filters', label: 'Clear All Filters', category: 'View', action: clearFilters },
     // File
     { id: 'import', label: 'Import Photos', category: 'File', action: importFolder },
-  ], [selectedArray, setFlag, setRating, setColorLabel, clearFilters, importFolder, cycleOverlayMode]);
+    { id: 'export-xmp', label: 'Export XMP Sidecars', category: 'File', action: async () => {
+      // Count annotated images
+      let annotated = 0;
+      for (const [, img] of imageMap) {
+        if (img.rating > 0 || img.flag !== 'none' || img.colorLabel !== 'none') annotated++;
+      }
+      if (annotated === 0) {
+        alert('No annotated images to export. Rate, flag, or label some images first.');
+        return;
+      }
+      const folder = folderPath || 'the source directory';
+      const confirmed1 = confirm(
+        `This will write .xmp sidecar files for ${annotated} annotated image${annotated > 1 ? 's' : ''} to ${folder}.\n\nOnly images with ratings, flags, or color labels will be exported.`
+      );
+      if (!confirmed1) return;
+      const confirmed2 = confirm(
+        '⚠️ WARNING: This will overwrite any existing .xmp sidecar files in this directory. This cannot be undone.\n\nAre you sure you want to continue?'
+      );
+      if (!confirmed2) return;
+      const result = await exportXmpSidecars();
+      if (result) {
+        if (result.errors.length > 0) {
+          alert(`Wrote ${result.written} of ${result.written + result.errors.length} files. ${result.errors.length} failed.\n\nErrors:\n${result.errors.join('\n')}`);
+        } else {
+          alert(`✓ Wrote ${result.written} XMP sidecar file${result.written > 1 ? 's' : ''}.`);
+        }
+      } else {
+        alert('XMP export failed. Check console for details.');
+      }
+    }},
+  ], [selectedArray, setFlag, setRating, setColorLabel, clearFilters, importFolder, cycleOverlayMode, imageMap, folderPath, exportXmpSidecars]);
 
   const filtered = useMemo(() => {
     if (!query) return commands;

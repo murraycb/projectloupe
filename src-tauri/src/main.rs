@@ -715,6 +715,119 @@ struct AnnotationPayload {
     color_label: String,
 }
 
+/// Export XMP sidecar files for all annotated images.
+/// Writes Lightroom-compatible .xmp files alongside the original RAW files.
+#[command]
+async fn export_xmp_sidecars(
+    state: State<'_, AppState>,
+) -> Result<XmpExportResult, String> {
+    let db_guard = state.session_db.lock().map_err(|e| e.to_string())?;
+    let db = db_guard.as_ref().ok_or("No session loaded — import a folder first")?;
+
+    let images = db.load_images().map_err(|e| e.to_string())?;
+
+    let mut written = 0u32;
+    let mut skipped = 0u32;
+    let mut errors: Vec<String> = Vec::new();
+
+    for img in &images {
+        // Skip images with no annotations
+        if img.rating == 0 && img.flag == "none" && img.color_label == "none" {
+            skipped += 1;
+            continue;
+        }
+
+        let source_path = std::path::Path::new(&img.file_path);
+        let xmp_path = source_path.with_extension("xmp");
+
+        // Get file extension for SidecarForExtension (uppercase, no dot)
+        let ext = source_path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("RAW")
+            .to_uppercase();
+
+        let xmp_content = build_xmp_sidecar(img.rating, &img.flag, &img.color_label, &ext);
+
+        match std::fs::write(&xmp_path, &xmp_content) {
+            Ok(_) => written += 1,
+            Err(e) => errors.push(format!("{}: {}", img.filename, e)),
+        }
+    }
+
+    Ok(XmpExportResult { written, skipped, errors })
+}
+
+#[derive(Debug, Serialize)]
+struct XmpExportResult {
+    written: u32,
+    skipped: u32,
+    errors: Vec<String>,
+}
+
+/// Build a Lightroom-compatible XMP sidecar string.
+fn build_xmp_sidecar(rating: i32, flag: &str, color_label: &str, extension: &str) -> String {
+    let mut attrs = Vec::new();
+
+    // Rating (omit when 0)
+    if rating > 0 {
+        attrs.push(format!("   xmp:Rating=\"{}\"", rating));
+    }
+
+    // Color label
+    let label_capitalized = match color_label {
+        "red" => Some("Red"),
+        "yellow" => Some("Yellow"),
+        "green" => Some("Green"),
+        "blue" => Some("Blue"),
+        "purple" => Some("Purple"),
+        _ => None,
+    };
+    if let Some(label) = label_capitalized {
+        attrs.push(format!("   xmp:Label=\"{}\"", label));
+    }
+
+    // Photoshop label color (lowercase)
+    if let Some(label) = label_capitalized {
+        attrs.push(format!("   photoshop:LabelColor=\"{}\"", label.to_lowercase()));
+    }
+
+    // Sidecar extension
+    attrs.push(format!("   photoshop:SidecarForExtension=\"{}\"", extension));
+
+    // Pick/reject flag
+    match flag {
+        "pick" => {
+            attrs.push("   xmpDM:good=\"true\"".to_string());
+            attrs.push("   xmpDM:pick=\"1\"".to_string());
+        }
+        "reject" => {
+            attrs.push("   xmpDM:good=\"false\"".to_string());
+            attrs.push("   xmpDM:pick=\"-1\"".to_string());
+        }
+        _ => {
+            attrs.push("   xmpDM:pick=\"0\"".to_string());
+        }
+    }
+
+    let attrs_str = attrs.join("\n");
+
+    format!(
+        r#"<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:xmpDM="http://ns.adobe.com/xmp/1.0/DynamicMedia/"
+    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+{}
+  >
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+"#,
+        attrs_str
+    )
+}
+
 #[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -940,6 +1053,7 @@ fn main() {
             persist_color_label,
             persist_flags_batch,
             load_annotations,
+            export_xmp_sidecars,
             get_thumbnail_v2,
             get_thumbnails_batch_v2,
             prefetch_thumbnails,
