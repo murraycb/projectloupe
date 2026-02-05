@@ -16,10 +16,6 @@ function ThumbnailCard({ image, burstId, frameIndex, frameCount }: ThumbnailCard
   const { selectedIds, toggleSelection, overlayMode, openLoupe, toggleBurstExpanded } = useImageStore();
   const isSelected = selectedIds.has(image.id);
 
-  // Placeholder hue/brightness kept for potential future use but not used for swatch
-  const _hue = image._placeholderHue || 0;
-  const _brightness = image._placeholderBrightness || 0.5;
-
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     toggleSelection(image.id);

@@ -24,9 +24,6 @@ function BurstGroup({ burstId }: BurstGroupProps) {
   const isSelected = burst.imageIds.some((id) => selectedIds.has(id));
   const isExpanded = expandedBursts.has(burstId);
 
-  const hue = coverImage._placeholderHue || 0;
-  const brightness = coverImage._placeholderBrightness || 0.5;
-
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     openLoupe(coverImage.id);

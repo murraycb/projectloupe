@@ -1,7 +1,7 @@
 {
   "productName": "ProjectLoupe",
-  "version": "0.1.0",
-  "identifier": "com.projectloupe.app",
+  "version": "0.1.0-alpha",
+  "identifier": "com.projectloupe.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -34,7 +34,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$HOME/.projectloupe/**", "/tmp/**"],
+          "allow": ["$HOME/**", "/tmp/**", "/Volumes/**"],
           "deny": []
         }
       }
@@ -42,7 +42,18 @@
     "macOSPrivateApi": true
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": ["dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
   },
   "plugins": {
     "shell": {
