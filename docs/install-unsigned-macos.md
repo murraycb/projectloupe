@@ -30,6 +30,16 @@ If Option A doesn't show the Open button:
 5. Enter your password when prompted
 6. Click **Open** in the confirmation dialog
 
+## Prerequisites
+
+ProjectLoupe requires **exiftool** for reading photo metadata and generating thumbnails:
+
+```
+brew install exiftool
+```
+
+If you don't have Homebrew: https://brew.sh
+
 ## Apple Silicon Note
 
 This build is for Apple Silicon Macs (M1/M2/M3/M4). If you're on an Intel Mac, let us know and we'll provide an x86 build.
